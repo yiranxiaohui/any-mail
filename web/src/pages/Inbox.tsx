@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { getEmails, getAccounts, triggerSync, type Email, type Account } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import ProviderBadge from "@/components/ProviderBadge";
 import { toast } from "sonner";
 
 export default function Inbox() {
+  const { t } = useTranslation();
   const [emails, setEmails] = useState<Email[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [filterAccount, setFilterAccount] = useState("all");
@@ -48,10 +50,10 @@ export default function Inbox() {
     try {
       const res = await triggerSync();
       const total = res.results.reduce((s, r) => s + r.synced, 0);
-      toast.success(`Synced ${total} new email(s)`);
+      toast.success(t("inbox.syncResult", { count: total }));
       await fetchEmails();
     } catch {
-      toast.error("Sync failed");
+      toast.error(t("inbox.syncFailed"));
     } finally {
       setSyncing(false);
     }
@@ -64,12 +66,11 @@ export default function Inbox() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Inbox</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("inbox.title")}</h1>
           <p className="text-sm text-muted-foreground">
-            {emails.length} email(s)
+            {t("inbox.emailCount", { count: emails.length })}
           </p>
         </div>
         <Button onClick={handleSync} disabled={syncing} size="sm">
@@ -82,18 +83,17 @@ export default function Inbox() {
               <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
             </svg>
           )}
-          {syncing ? "Syncing..." : "Sync"}
+          {syncing ? t("inbox.syncing") : t("inbox.sync")}
         </Button>
       </div>
 
-      {/* Filters */}
       <div className="flex gap-3">
         <Select value={filterAccount} onValueChange={(v) => setFilterAccount(v ?? "all")}>
           <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="All Accounts" />
+            <SelectValue placeholder={t("inbox.allAccounts")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Accounts</SelectItem>
+            <SelectItem value="all">{t("inbox.allAccounts")}</SelectItem>
             {accounts.map((a) => (
               <SelectItem key={a.id} value={a.id}>
                 {a.email}
@@ -104,24 +104,23 @@ export default function Inbox() {
 
         <form onSubmit={handleSearch} className="flex flex-1 gap-2">
           <Input
-            placeholder="Search by recipient..."
+            placeholder={t("inbox.searchPlaceholder")}
             value={searchTo}
             onChange={(e) => setSearchTo(e.target.value)}
             className="max-w-sm"
           />
           <Button type="submit" variant="outline" size="sm">
-            Search
+            {t("inbox.search")}
           </Button>
         </form>
       </div>
 
-      {/* Email List */}
       {loading ? (
         <div className="flex items-center justify-center py-20 text-muted-foreground">
           <svg className="mr-2 h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 12a9 9 0 1 1-6.219-8.56" />
           </svg>
-          Loading...
+          {t("inbox.loading")}
         </div>
       ) : emails.length === 0 ? (
         <Card>
@@ -130,8 +129,8 @@ export default function Inbox() {
               <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
               <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
             </svg>
-            <p className="text-sm font-medium">No emails yet</p>
-            <p className="text-xs mt-1">Emails will appear here once received</p>
+            <p className="text-sm font-medium">{t("inbox.noEmails")}</p>
+            <p className="text-xs mt-1">{t("inbox.noEmailsHint")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -147,7 +146,7 @@ export default function Inbox() {
                   <div className="flex items-center gap-2">
                     <ProviderBadge provider={email.provider} />
                     <span className="text-sm font-semibold truncate">
-                      {email.subject || "(no subject)"}
+                      {email.subject || t("inbox.noSubject")}
                     </span>
                   </div>
                   <span className="text-xs text-muted-foreground whitespace-nowrap ml-4">
@@ -155,8 +154,8 @@ export default function Inbox() {
                   </span>
                 </div>
                 <div className="flex gap-4 text-xs text-muted-foreground">
-                  <span className="truncate">From: {email.from_address}</span>
-                  <span className="truncate">To: {email.to_address}</span>
+                  <span className="truncate">{t("email.from")}: {email.from_address}</span>
+                  <span className="truncate">{t("email.to")}: {email.to_address}</span>
                 </div>
                 <p className="text-xs text-muted-foreground truncate">
                   {(email.text_body || "").slice(0, 140)}

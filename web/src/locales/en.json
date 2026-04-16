@@ -1,0 +1,155 @@
+{
+  "app": {
+    "name": "AnyMail"
+  },
+  "nav": {
+    "inbox": "Inbox",
+    "compose": "Compose",
+    "accounts": "Accounts",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "login": {
+    "title": "AnyMail",
+    "description": "Enter your admin password to continue",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signingIn": "Signing in...",
+    "invalidPassword": "Invalid password"
+  },
+  "inbox": {
+    "title": "Inbox",
+    "emailCount": "{{count}} email(s)",
+    "sync": "Sync",
+    "syncing": "Syncing...",
+    "syncResult": "Synced {{count}} new email(s)",
+    "syncFailed": "Sync failed",
+    "allAccounts": "All Accounts",
+    "searchPlaceholder": "Search by recipient...",
+    "search": "Search",
+    "loading": "Loading...",
+    "noEmails": "No emails yet",
+    "noEmailsHint": "Emails will appear here once received",
+    "noSubject": "(no subject)"
+  },
+  "email": {
+    "from": "From",
+    "to": "To",
+    "date": "Date",
+    "html": "HTML",
+    "text": "Text",
+    "empty": "(empty)",
+    "notFound": "Email not found",
+    "back": "Back",
+    "backToInbox": "Back to Inbox",
+    "reply": "Reply",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this email?",
+    "deleted": "Email deleted"
+  },
+  "compose": {
+    "title": "Compose Email",
+    "from": "From",
+    "fromPlaceholder": "you@yourdomain.com",
+    "to": "To",
+    "toPlaceholder": "recipient@example.com",
+    "subject": "Subject",
+    "subjectPlaceholder": "Subject",
+    "body": "Body",
+    "bodyPlaceholder": "Write your message...",
+    "send": "Send",
+    "sending": "Sending...",
+    "sent": "Email sent",
+    "sendFailed": "Failed to send",
+    "required": "From, To, and Subject are required"
+  },
+  "accounts": {
+    "title": "Accounts",
+    "description": "Manage your connected email accounts",
+    "addAccount": "Add Account",
+    "connectedAccounts": "Connected accounts",
+    "accountCount": "{{count}} account(s) connected",
+    "noAccounts": "No accounts connected",
+    "noAccountsHint": "Click \"Add Account\" to get started",
+    "connected": "Connected {{date}}",
+    "expired": "Expired",
+    "expires": "Expires {{date}}",
+    "remove": "Remove",
+    "removeConfirm": "Delete account {{email}} and all its emails?",
+    "removed": "Removed {{email}}",
+    "dialog": {
+      "title": "Add Account",
+      "description": "Choose account type to create or import"
+    },
+    "domain": {
+      "tab": "Domain",
+      "description": "Create an email address on your domain (requires Cloudflare Email Routing)",
+      "placeholder": "user@yourdomain.com",
+      "expires": "Expires",
+      "permanent": "Permanent",
+      "1h": "1 hour",
+      "6h": "6 hours",
+      "1d": "1 day",
+      "3d": "3 days",
+      "7d": "7 days",
+      "30d": "30 days",
+      "create": "Create",
+      "creating": "Creating...",
+      "created": "Created {{email}}",
+      "createFailed": "Failed to create account",
+      "invalidEmail": "Please enter a full email address, e.g. user@yourdomain.com"
+    },
+    "oauth": {
+      "tab": "OAuth",
+      "description": "Connect your Gmail or Outlook account via OAuth",
+      "connectGmail": "Connect Gmail",
+      "connectOutlook": "Connect Outlook"
+    },
+    "import": {
+      "tab": "Bulk Import",
+      "description": "Import Outlook / Hotmail / Live accounts in bulk. One per line:",
+      "format": "account----password----ssid----token",
+      "placeholder": "user1@outlook.com----pass1----ssid1----token1\nuser2@hotmail.com----pass2----ssid2----token2",
+      "import": "Import",
+      "importCount": "Import ({{count}} accounts)",
+      "importing": "Importing...",
+      "importResult": "Imported {{success}}/{{total}} accounts",
+      "importFailed": "Import failed"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Configure system and OAuth credentials",
+    "general": "General",
+    "generalDescription": "System configuration",
+    "gmail": "Gmail",
+    "gmailDescription": "Google Cloud Console OAuth 2.0 credentials",
+    "outlook": "Outlook",
+    "outlookDescription": "Azure App Registration credentials",
+    "save": "Save Changes",
+    "saving": "Saving...",
+    "saved": "Settings saved",
+    "saveFailed": "Failed to save settings",
+    "noChanges": "No changes to save",
+    "lastUpdated": "Last updated: {{date}}",
+    "fields": {
+      "adminPassword": "Admin Password",
+      "adminPasswordPlaceholder": "Default: admin",
+      "resendApiKey": "Resend API Key",
+      "resendApiKeyPlaceholder": "re_xxxx",
+      "gmailClientId": "Client ID",
+      "gmailClientIdPlaceholder": "xxxx.apps.googleusercontent.com",
+      "gmailClientSecret": "Client Secret",
+      "gmailClientSecretPlaceholder": "GOCSPX-xxxx",
+      "outlookClientId": "Client ID",
+      "outlookClientIdPlaceholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "outlookClientSecret": "Client Secret",
+      "outlookClientSecretPlaceholder": "xxxx~xxxx"
+    }
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "zh": "Chinese"
+  }
+}

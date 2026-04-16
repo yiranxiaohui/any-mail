@@ -1,0 +1,155 @@
+{
+  "app": {
+    "name": "AnyMail"
+  },
+  "nav": {
+    "inbox": "收件箱",
+    "compose": "写邮件",
+    "accounts": "账户",
+    "settings": "设置",
+    "logout": "退出登录"
+  },
+  "login": {
+    "title": "AnyMail",
+    "description": "请输入管理员密码以继续",
+    "password": "密码",
+    "signIn": "登录",
+    "signingIn": "登录中...",
+    "invalidPassword": "密码错误"
+  },
+  "inbox": {
+    "title": "收件箱",
+    "emailCount": "{{count}} 封邮件",
+    "sync": "同步",
+    "syncing": "同步中...",
+    "syncResult": "同步了 {{count}} 封新邮件",
+    "syncFailed": "同步失败",
+    "allAccounts": "所有账户",
+    "searchPlaceholder": "按收件人搜索...",
+    "search": "搜索",
+    "loading": "加载中...",
+    "noEmails": "暂无邮件",
+    "noEmailsHint": "收到邮件后将显示在这里",
+    "noSubject": "(无主题)"
+  },
+  "email": {
+    "from": "发件人",
+    "to": "收件人",
+    "date": "日期",
+    "html": "HTML",
+    "text": "文本",
+    "empty": "(空)",
+    "notFound": "邮件未找到",
+    "back": "返回",
+    "backToInbox": "返回收件箱",
+    "reply": "回复",
+    "delete": "删除",
+    "deleteConfirm": "确定删除这封邮件？",
+    "deleted": "邮件已删除"
+  },
+  "compose": {
+    "title": "写邮件",
+    "from": "发件人",
+    "fromPlaceholder": "you@yourdomain.com",
+    "to": "收件人",
+    "toPlaceholder": "recipient@example.com",
+    "subject": "主题",
+    "subjectPlaceholder": "主题",
+    "body": "正文",
+    "bodyPlaceholder": "输入邮件内容...",
+    "send": "发送",
+    "sending": "发送中...",
+    "sent": "邮件已发送",
+    "sendFailed": "发送失败",
+    "required": "发件人、收件人和主题为必填项"
+  },
+  "accounts": {
+    "title": "账户",
+    "description": "管理已连接的邮箱账户",
+    "addAccount": "添加账户",
+    "connectedAccounts": "已连接账户",
+    "accountCount": "已连接 {{count}} 个账户",
+    "noAccounts": "暂无已连接账户",
+    "noAccountsHint": "点击「添加账户」开始使用",
+    "connected": "连接于 {{date}}",
+    "expired": "已过期",
+    "expires": "{{date}} 过期",
+    "remove": "移除",
+    "removeConfirm": "确定删除账户 {{email}} 及其所有邮件？",
+    "removed": "已移除 {{email}}",
+    "dialog": {
+      "title": "添加账户",
+      "description": "选择账户类型进行创建或导入"
+    },
+    "domain": {
+      "tab": "域名邮箱",
+      "description": "在你的域名下创建邮箱地址（需要 Cloudflare Email Routing）",
+      "placeholder": "user@yourdomain.com",
+      "expires": "有效期",
+      "permanent": "永久",
+      "1h": "1 小时",
+      "6h": "6 小时",
+      "1d": "1 天",
+      "3d": "3 天",
+      "7d": "7 天",
+      "30d": "30 天",
+      "create": "创建",
+      "creating": "创建中...",
+      "created": "已创建 {{email}}",
+      "createFailed": "创建账户失败",
+      "invalidEmail": "请输入完整的邮箱地址，例如 user@yourdomain.com"
+    },
+    "oauth": {
+      "tab": "OAuth 授权",
+      "description": "通过 OAuth 连接你的 Gmail 或 Outlook 账户",
+      "connectGmail": "连接 Gmail",
+      "connectOutlook": "连接 Outlook"
+    },
+    "import": {
+      "tab": "批量导入",
+      "description": "批量导入 Outlook / Hotmail / Live 账户，每行一个：",
+      "format": "账号----密码----ssid----令牌",
+      "placeholder": "user1@outlook.com----pass1----ssid1----token1\nuser2@hotmail.com----pass2----ssid2----token2",
+      "import": "导入",
+      "importCount": "导入（{{count}} 个账户）",
+      "importing": "导入中...",
+      "importResult": "成功导入 {{success}}/{{total}} 个账户",
+      "importFailed": "导入失败"
+    }
+  },
+  "settings": {
+    "title": "设置",
+    "description": "配置系统和 OAuth 凭据",
+    "general": "通用",
+    "generalDescription": "系统配置",
+    "gmail": "Gmail",
+    "gmailDescription": "Google Cloud Console OAuth 2.0 凭据",
+    "outlook": "Outlook",
+    "outlookDescription": "Azure 应用注册凭据",
+    "save": "保存更改",
+    "saving": "保存中...",
+    "saved": "设置已保存",
+    "saveFailed": "保存设置失败",
+    "noChanges": "没有需要保存的更改",
+    "lastUpdated": "上次更新：{{date}}",
+    "fields": {
+      "adminPassword": "管理员密码",
+      "adminPasswordPlaceholder": "默认：admin",
+      "resendApiKey": "Resend API Key",
+      "resendApiKeyPlaceholder": "re_xxxx",
+      "gmailClientId": "Client ID",
+      "gmailClientIdPlaceholder": "xxxx.apps.googleusercontent.com",
+      "gmailClientSecret": "Client Secret",
+      "gmailClientSecretPlaceholder": "GOCSPX-xxxx",
+      "outlookClientId": "Client ID",
+      "outlookClientIdPlaceholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "outlookClientSecret": "Client Secret",
+      "outlookClientSecretPlaceholder": "xxxx~xxxx"
+    }
+  },
+  "language": {
+    "label": "语言",
+    "en": "English",
+    "zh": "中文"
+  }
+}

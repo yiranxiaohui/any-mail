@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -6,12 +7,19 @@ import { Separator } from "@/components/ui/separator";
 import { Toaster } from "@/components/ui/sonner";
 
 export default function Layout() {
+  const { t, i18n } = useTranslation();
   const { logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
     logout();
     navigate("/login");
+  };
+
+  const toggleLang = () => {
+    const next = i18n.language === "zh" ? "en" : "zh";
+    i18n.changeLanguage(next);
+    localStorage.setItem("anymail_lang", next);
   };
 
   return (
@@ -32,23 +40,36 @@ export default function Layout() {
         <div className="flex flex-col gap-1 p-3 flex-1">
           <SidebarLink to="/" end>
             <IconInbox />
-            Inbox
+            {t("nav.inbox")}
           </SidebarLink>
           <SidebarLink to="/compose">
             <IconCompose />
-            Compose
+            {t("nav.compose")}
           </SidebarLink>
           <SidebarLink to="/accounts">
             <IconAccounts />
-            Accounts
+            {t("nav.accounts")}
           </SidebarLink>
           <SidebarLink to="/settings">
             <IconSettings />
-            Settings
+            {t("nav.settings")}
           </SidebarLink>
         </div>
         <Separator />
-        <div className="p-3">
+        <div className="p-3 space-y-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2.5 text-muted-foreground"
+            onClick={toggleLang}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M2 12h20" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+            {i18n.language === "zh" ? "English" : "中文"}
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -60,7 +81,7 @@ export default function Layout() {
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" x2="9" y1="12" y2="12" />
             </svg>
-            Logout
+            {t("nav.logout")}
           </Button>
         </div>
       </nav>
