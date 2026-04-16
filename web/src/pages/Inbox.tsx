@@ -10,7 +10,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import ProviderBadge from "@/components/ProviderBadge";
 import { toast } from "sonner";
@@ -89,8 +88,12 @@ export default function Inbox() {
 
       <div className="flex gap-3">
         <Select value={filterAccount} onValueChange={(v) => setFilterAccount(v ?? "all")}>
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder={t("inbox.allAccounts")} />
+          <SelectTrigger className="w-[260px]">
+            <span className="truncate">
+              {filterAccount === "all"
+                ? t("inbox.allAccounts")
+                : accounts.find((a) => a.id === filterAccount)?.email ?? filterAccount}
+            </span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("inbox.allAccounts")}</SelectItem>
