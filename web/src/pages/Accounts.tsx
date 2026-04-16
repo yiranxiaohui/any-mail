@@ -25,8 +25,10 @@ export default function Accounts() {
 
   // Search & Pagination
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
 
   // Edit
   const [editAccount, setEditAccount] = useState<Account | null>(null);
@@ -34,19 +36,29 @@ export default function Accounts() {
   const [editExpiry, setEditExpiry] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const fetchAccounts = async () => {
+  const fetchAccounts = async (s = debouncedSearch, p = page, ps = pageSize) => {
     setLoading(true);
     try {
-      const data = await getAccounts();
+      const data = await getAccounts({ search: s || undefined, limit: ps, offset: (p - 1) * ps });
       setAccounts(data.accounts);
+      setTotal(data.meta.total);
     } finally {
       setLoading(false);
     }
   };
 
+  // Debounce search
   useEffect(() => {
-    fetchAccounts();
-  }, []);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    fetchAccounts(debouncedSearch, page, pageSize);
+  }, [debouncedSearch, page, pageSize]);
 
   const getExpiresAt = (): string | null => {
     if (expiry === "permanent") return null;
@@ -132,13 +144,8 @@ export default function Accounts() {
 
   const importLineCount = importText.trim() ? importText.trim().split("\n").filter((l) => l.trim()).length : 0;
 
-  const filteredAccounts = search
-    ? accounts.filter((a) => a.email.toLowerCase().includes(search.toLowerCase()))
-    : accounts;
-
-  const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedAccounts = filteredAccounts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <div className="space-y-6">
@@ -289,12 +296,12 @@ export default function Accounts() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-base">{t("accounts.connectedAccounts")}</CardTitle>
-              <CardDescription>{t("accounts.accountCount", { count: accounts.length })}</CardDescription>
+              <CardDescription>{t("accounts.accountCount", { count: total })}</CardDescription>
             </div>
             <Input
               placeholder={t("accounts.searchPlaceholder")}
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              onChange={(e) => setSearch(e.target.value)}
               className="w-64"
             />
           </div>
@@ -307,7 +314,7 @@ export default function Accounts() {
             </svg>
             {t("inbox.loading")}
           </CardContent>
-        ) : filteredAccounts.length === 0 ? (
+        ) : accounts.length === 0 ? (
           <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <svg className="mb-3 h-10 w-10 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -320,7 +327,7 @@ export default function Accounts() {
           </CardContent>
         ) : (
           <div className="divide-y">
-            {pagedAccounts.map((account) => (
+            {accounts.map((account) => (
               <div key={account.id} className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
@@ -377,7 +384,7 @@ export default function Accounts() {
               <option value={100}>100</option>
             </select>
             <span className="text-xs text-muted-foreground">
-              {t("accounts.pageInfo", { from: (currentPage - 1) * pageSize + 1, to: Math.min(currentPage * pageSize, filteredAccounts.length), total: filteredAccounts.length })}
+              {t("accounts.pageInfo", { from: (currentPage - 1) * pageSize + 1, to: Math.min(currentPage * pageSize, total), total })}
             </span>
           </div>
           <div className="flex gap-1">

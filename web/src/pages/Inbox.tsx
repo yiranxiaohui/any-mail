@@ -37,7 +37,7 @@ export default function Inbox() {
   };
 
   useEffect(() => {
-    getAccounts().then((d) => setAccounts(d.accounts));
+    getAccounts({ limit: 100 }).then((d) => setAccounts(d.accounts));
   }, []);
 
   useEffect(() => {

@@ -3,12 +3,36 @@ import type { Env } from "../types";
 
 const accounts = new Hono<{ Bindings: Env }>();
 
-/** 列出所有绑定的邮箱账号 */
+/** 列出邮箱账号（支持分页和搜索） */
 accounts.get("/", async (c) => {
-  const result = await c.env.DB.prepare(
-    "SELECT id, provider, email, expires_at, created_at, updated_at FROM accounts ORDER BY created_at DESC"
-  ).all();
-  return c.json({ accounts: result.results });
+  const search = c.req.query("search");
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "20"), 100);
+  const offset = parseInt(c.req.query("offset") ?? "0");
+
+  let sql = "SELECT id, provider, email, expires_at, created_at, updated_at FROM accounts";
+  let countSql = "SELECT COUNT(*) as total FROM accounts";
+  const params: string[] = [];
+  const countParams: string[] = [];
+
+  if (search) {
+    sql += " WHERE email LIKE ?";
+    countSql += " WHERE email LIKE ?";
+    params.push(`%${search}%`);
+    countParams.push(`%${search}%`);
+  }
+
+  sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+  params.push(String(limit), String(offset));
+
+  const batchResults = await c.env.DB.batch([
+    c.env.DB.prepare(sql).bind(...params),
+    c.env.DB.prepare(countSql).bind(...countParams),
+  ]);
+
+  const rows = batchResults[0]?.results ?? [];
+  const total = (batchResults[1]?.results[0] as { total: number })?.total ?? 0;
+
+  return c.json({ accounts: rows, meta: { limit, offset, total } });
 });
 
 /** 查询单个账号 */

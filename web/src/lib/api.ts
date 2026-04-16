@@ -90,8 +90,15 @@ export function sendEmail(data: { from: string; to: string; subject: string; tex
 }
 
 // Accounts
-export function getAccounts() {
-  return request<{ accounts: Account[] }>("/api/accounts");
+export function getAccounts(params?: { search?: string; limit?: number; offset?: number }) {
+  const q = new URLSearchParams();
+  if (params?.search) q.set("search", params.search);
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.offset) q.set("offset", String(params.offset));
+  const qs = q.toString();
+  return request<{ accounts: Account[]; meta: { limit: number; offset: number; total: number } }>(
+    `/api/accounts${qs ? `?${qs}` : ""}`
+  );
 }
 
 export function createDomainAccount(email: string, expiresAt?: string | null) {
