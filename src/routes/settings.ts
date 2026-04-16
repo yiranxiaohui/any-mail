@@ -53,8 +53,16 @@ settings.put("/", async (c) => {
 });
 
 /** SECRET 类型的值只显示前4位 + **** */
+/** 域名列表缓存（10 分钟） */
+let domainsCache: { data: { id: string; name: string; status: string }[]; expires: number } | null = null;
+
 /** 从 Cloudflare API 获取域名列表 */
 settings.get("/domains", async (c) => {
+  // 命中缓存直接返回
+  if (domainsCache && Date.now() < domainsCache.expires) {
+    return c.json({ domains: domainsCache.data });
+  }
+
   // 优先从 env 读取（部署时设置），其次从 DB settings 读取
   const rows = await c.env.DB.prepare(
     "SELECT key, value FROM settings WHERE key IN ('CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID')"
@@ -141,6 +149,9 @@ settings.get("/domains", async (c) => {
       // 子域获取失败不影响主域
     }
   }
+
+  // 缓存 10 分钟
+  domainsCache = { data: domains, expires: Date.now() + 10 * 60 * 1000 };
 
   return c.json({ domains });
 });
