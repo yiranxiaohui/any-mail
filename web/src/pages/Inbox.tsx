@@ -21,6 +21,7 @@ export default function Inbox() {
   const [emails, setEmails] = useState<Email[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [filterAccount, setFilterAccount] = useState(searchParams.get("account_id") || "all");
+  const [filterProvider, setFilterProvider] = useState("");
   const [searchTo, setSearchTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -35,6 +36,7 @@ export default function Inbox() {
     try {
       const params: Record<string, string | number> = { limit: ps, offset: (p - 1) * ps };
       if (filterAccount !== "all") params.account_id = filterAccount;
+      if (filterProvider) params.provider = filterProvider;
       if (searchTo) params.to = searchTo;
       const data = await getEmails(params as Record<string, string>);
       setEmails(data.emails);
@@ -50,7 +52,7 @@ export default function Inbox() {
 
   useEffect(() => {
     fetchEmails(page, pageSize);
-  }, [filterAccount, page, pageSize]);
+  }, [filterAccount, filterProvider, page, pageSize]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -101,6 +103,17 @@ export default function Inbox() {
 
       {/* Filters */}
       <div className="flex gap-3 shrink-0">
+        <select
+          value={filterProvider}
+          onChange={(e) => { setFilterProvider(e.target.value); setPage(1); }}
+          className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+        >
+          <option value="">{t("accounts.allTypes")}</option>
+          <option value="domain">{t("accounts.typeDomain")}</option>
+          <option value="gmail">Gmail</option>
+          <option value="outlook">Outlook</option>
+          <option value="resend">Resend</option>
+        </select>
         <Select value={filterAccount} onValueChange={(v) => { setFilterAccount(v ?? "all"); setPage(1); }}>
           <SelectTrigger className="w-[260px]">
             <span className="truncate">

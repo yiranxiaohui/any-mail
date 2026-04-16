@@ -6,6 +6,7 @@ const emails = new Hono<{ Bindings: Env }>();
 /** 查询邮件列表 */
 emails.get("/", async (c) => {
   const accountId = c.req.query("account_id");
+  const provider = c.req.query("provider");
   const to = c.req.query("to");
   const limit = Math.min(parseInt(c.req.query("limit") ?? "50"), 100);
   const offset = parseInt(c.req.query("offset") ?? "0");
@@ -20,6 +21,12 @@ emails.get("/", async (c) => {
     countSql += " AND account_id = ?";
     params.push(accountId);
     countParams.push(accountId);
+  }
+  if (provider) {
+    sql += " AND provider = ?";
+    countSql += " AND provider = ?";
+    params.push(provider);
+    countParams.push(provider);
   }
   if (to) {
     sql += " AND to_address LIKE ?";
