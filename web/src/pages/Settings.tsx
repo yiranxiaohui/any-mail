@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getSettings, updateSettings } from "@/lib/api";
+import { getSettings, updateSettings, syncDomainsFromCloudflare } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +27,7 @@ const OUTLOOK_FIELDS: FieldConfig[] = [
 const GENERAL_FIELDS: FieldConfig[] = [
   { key: "ADMIN_PASSWORD", labelKey: "settings.fields.adminPassword", placeholderKey: "settings.fields.adminPasswordPlaceholder", sensitive: true },
   { key: "RESEND_API_KEY", labelKey: "settings.fields.resendApiKey", placeholderKey: "settings.fields.resendApiKeyPlaceholder", sensitive: true },
+  { key: "EMAIL_DOMAINS", labelKey: "settings.fields.emailDomains", placeholderKey: "settings.fields.emailDomainsPlaceholder", sensitive: false },
   { key: "CLOUDFLARE_API_TOKEN", labelKey: "settings.fields.cfApiToken", placeholderKey: "settings.fields.cfApiTokenPlaceholder", sensitive: true },
   { key: "CLOUDFLARE_ACCOUNT_ID", labelKey: "settings.fields.cfAccountId", placeholderKey: "settings.fields.cfAccountIdPlaceholder", sensitive: false },
 ];
@@ -37,6 +38,7 @@ export default function Settings() {
   const [existing, setExisting] = useState<Record<string, { masked: string; updated_at: string }>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [syncingDomains, setSyncingDomains] = useState(false);
 
   useEffect(() => {
     getSettings()
@@ -52,6 +54,19 @@ export default function Settings() {
 
   const handleChange = (key: string, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSyncDomains = async () => {
+    setSyncingDomains(true);
+    try {
+      const res = await syncDomainsFromCloudflare();
+      handleChange("EMAIL_DOMAINS", res.domains.join(","));
+      toast.success(t("settings.domainsSynced", { count: res.domains.length }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.domainsSyncFailed"));
+    } finally {
+      setSyncingDomains(false);
+    }
   };
 
   const handleSave = async () => {
@@ -112,6 +127,11 @@ export default function Settings() {
         values={values}
         existing={existing}
         onChange={handleChange}
+        extraAction={
+          <Button variant="outline" size="sm" disabled={syncingDomains} onClick={handleSyncDomains}>
+            {syncingDomains ? t("settings.domainsSyncing") : t("settings.domainsSyncBtn")}
+          </Button>
+        }
       />
 
       <SettingsSection
@@ -169,6 +189,7 @@ function SettingsSection({
   values,
   existing,
   onChange,
+  extraAction,
 }: {
   title: string;
   description: string;
@@ -177,17 +198,21 @@ function SettingsSection({
   values: Record<string, string>;
   existing: Record<string, { masked: string; updated_at: string }>;
   onChange: (key: string, value: string) => void;
+  extraAction?: React.ReactNode;
 }) {
   const { t } = useTranslation();
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center gap-2.5">
-          {icon}
-          <div>
-            <CardTitle className="text-base">{title}</CardTitle>
-            <CardDescription>{description}</CardDescription>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            {icon}
+            <div>
+              <CardTitle className="text-base">{title}</CardTitle>
+              <CardDescription>{description}</CardDescription>
+            </div>
           </div>
+          {extraAction}
         </div>
       </CardHeader>
       <Separator />

@@ -26,7 +26,7 @@ export default function Accounts() {
 
   const [newEmail, setNewEmail] = useState("");
   const [selectedDomain, setSelectedDomain] = useState("");
-  const [domains, setDomains] = useState<{ id: string; name: string; status: string }[]>([]);
+  const [domains, setDomains] = useState<{ name: string }[]>([]);
   const [expiry, setExpiry] = useState("permanent");
   const [creating, setCreating] = useState(false);
 
@@ -238,7 +238,7 @@ export default function Accounts() {
           <h1 className="text-2xl font-bold tracking-tight">{t("accounts.title")}</h1>
           <p className="text-sm text-muted-foreground">{t("accounts.description")}</p>
         </div>
-        <Button onClick={() => { setDialogOpen(true); getDomains().then((d) => { setDomains(d.domains); if (d.domains.length > 0 && !selectedDomain) setSelectedDomain(d.domains[0].name); }).catch(() => {}); }}>
+        <Button onClick={() => { setDialogOpen(true); getDomains().then((d) => { setDomains(d.domains); if (d.domains.length > 0) setSelectedDomain(d.domains[0].name); }).catch(() => {}); }}>
           <svg className="mr-1.5 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" x2="12" y1="5" y2="19" />
             <line x1="5" x2="19" y1="12" y2="12" />
@@ -280,7 +280,7 @@ export default function Accounts() {
                       className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
                     >
                       {domains.map((d) => (
-                        <option key={d.id} value={d.name}>{d.name}</option>
+                        <option key={d.name} value={d.name}>{d.name}</option>
                       ))}
                     </select>
                   </div>

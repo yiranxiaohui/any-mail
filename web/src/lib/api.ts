@@ -178,7 +178,11 @@ export function updateSettings(data: Record<string, string>) {
 // OAuth URLs
 // Domains
 export function getDomains() {
-  return request<{ domains: { id: string; name: string; status: string }[] }>("/api/settings/domains");
+  return request<{ domains: { name: string }[] }>("/api/settings/domains");
+}
+
+export function syncDomainsFromCloudflare() {
+  return request<{ ok: boolean; domains: string[] }>("/api/settings/domains/sync", { method: "POST" });
 }
 
 export const gmailAuthUrl = `${BASE}/api/oauth/gmail`;

@@ -4,6 +4,7 @@ import type { Env } from "../types";
 const ALLOWED_KEYS = [
   "ADMIN_PASSWORD",
   "RESEND_API_KEY",
+  "EMAIL_DOMAINS",
   "CLOUDFLARE_API_TOKEN",
   "CLOUDFLARE_ACCOUNT_ID",
   "GMAIL_CLIENT_ID",
@@ -52,18 +53,23 @@ settings.put("/", async (c) => {
   return c.json({ ok: true });
 });
 
-/** SECRET 类型的值只显示前4位 + **** */
-/** 域名列表缓存（10 分钟） */
-let domainsCache: { data: { id: string; name: string; status: string }[]; expires: number } | null = null;
-
-/** 从 Cloudflare API 获取域名列表 */
+/** 获取已配置的域名列表（从 DB 读取） */
 settings.get("/domains", async (c) => {
-  // 命中缓存直接返回
-  if (domainsCache && Date.now() < domainsCache.expires) {
-    return c.json({ domains: domainsCache.data });
+  const row = await c.env.DB.prepare("SELECT value FROM settings WHERE key = 'EMAIL_DOMAINS'")
+    .first<{ value: string }>();
+
+  if (!row?.value) {
+    return c.json({ domains: [] });
   }
 
-  // 优先从 env 读取（部署时设置），其次从 DB settings 读取
+  const domains = row.value.split(",").map((d) => d.trim()).filter(Boolean)
+    .map((name) => ({ name }));
+
+  return c.json({ domains });
+});
+
+/** 从 Cloudflare API 同步域名到 EMAIL_DOMAINS 配置 */
+settings.post("/domains/sync", async (c) => {
   const rows = await c.env.DB.prepare(
     "SELECT key, value FROM settings WHERE key IN ('CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID')"
   ).all<{ key: string; value: string }>();
@@ -76,14 +82,13 @@ settings.get("/domains", async (c) => {
     return c.json({ error: "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required." }, 400);
   }
 
-  // 获取所有域名
   const res = await fetch(`https://api.cloudflare.com/client/v4/zones?account.id=${accountId}&per_page=50`, {
     headers: { Authorization: `Bearer ${apiToken}` },
   });
 
   const data = await res.json() as {
     success: boolean;
-    result?: { id: string; name: string; status: string }[];
+    result?: { id: string; name: string }[];
     errors?: { message: string }[];
   };
 
@@ -91,69 +96,38 @@ settings.get("/domains", async (c) => {
     return c.json({ error: data.errors?.[0]?.message || "Failed to fetch domains" }, 500);
   }
 
-  const zones = data.result ?? [];
+  const allDomains: string[] = [];
 
-  // 获取每个域名的 Email Routing 子域
-  const domains: { id: string; name: string; status: string }[] = [];
+  for (const zone of data.result ?? []) {
+    allDomains.push(zone.name);
 
-  for (const zone of zones) {
-    // 主域本身
-    domains.push({ id: zone.id, name: zone.name, status: zone.status });
-
-    // 通过多个 API 提取 Email Routing 子域
+    // 提取子域
     try {
-      // 方法1: DNS MX 记录
       const dnsRes = await fetch(
         `https://api.cloudflare.com/client/v4/zones/${zone.id}/dns_records?type=MX&per_page=100`,
         { headers: { Authorization: `Bearer ${apiToken}` } }
       );
       const dnsData = await dnsRes.json() as {
         success: boolean;
-        result?: { name: string; type: string; content: string }[];
+        result?: { name: string }[];
       };
-      const subdomains = new Set<string>();
       if (dnsData.success && dnsData.result) {
         for (const record of dnsData.result) {
-          if (record.name !== zone.name) {
-            subdomains.add(record.name);
+          if (record.name !== zone.name && !allDomains.includes(record.name)) {
+            allDomains.push(record.name);
           }
         }
       }
-
-      // 方法2: Email Routing rules（catch-all 和自定义规则中的域名）
-      const rulesRes = await fetch(
-        `https://api.cloudflare.com/client/v4/zones/${zone.id}/email/routing/rules?per_page=50`,
-        { headers: { Authorization: `Bearer ${apiToken}` } }
-      );
-      const rulesData = await rulesRes.json() as {
-        success: boolean;
-        result?: { matchers?: { type: string; field?: string; value?: string }[] }[];
-      };
-      if (rulesData.success && rulesData.result) {
-        for (const rule of rulesData.result) {
-          for (const matcher of rule.matchers ?? []) {
-            if (matcher.value && matcher.value.includes("@")) {
-              const domain = matcher.value.split("@")[1];
-              if (domain && domain !== zone.name) {
-                subdomains.add(domain);
-              }
-            }
-          }
-        }
-      }
-
-      for (const sub of subdomains) {
-        domains.push({ id: `${zone.id}:${sub}`, name: sub, status: "active" });
-      }
-    } catch {
-      // 子域获取失败不影响主域
-    }
+    } catch {}
   }
 
-  // 缓存 10 分钟
-  domainsCache = { data: domains, expires: Date.now() + 10 * 60 * 1000 };
+  // 保存到 DB
+  const value = allDomains.join(",");
+  await c.env.DB.prepare(
+    "INSERT INTO settings (key, value, updated_at) VALUES ('EMAIL_DOMAINS', ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')"
+  ).bind(value, value).run();
 
-  return c.json({ domains });
+  return c.json({ ok: true, domains: allDomains });
 });
 
 function maskValue(key: string, value: string): string {
