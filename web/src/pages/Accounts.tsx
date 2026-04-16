@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getAccounts, deleteAccount, createDomainAccount, gmailAuthUrl, outlookAuthUrl, type Account } from "@/lib/api";
+import { getAccounts, deleteAccount, createDomainAccount, importAccounts, gmailAuthUrl, outlookAuthUrl, type Account } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,8 @@ export default function Accounts() {
   const [newEmail, setNewEmail] = useState("");
   const [expiry, setExpiry] = useState("permanent");
   const [creating, setCreating] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
 
   const fetchAccounts = async () => {
     setLoading(true);
@@ -54,6 +56,27 @@ export default function Accounts() {
       toast.error(err instanceof Error ? err.message : "Failed to create account");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!importText.trim()) return;
+    setImporting(true);
+    try {
+      const res = await importAccounts(importText);
+      toast.success(`Imported ${res.success}/${res.total} accounts`);
+      if (res.success > 0) {
+        setImportText("");
+        fetchAccounts();
+      }
+      const failed = res.results.filter((r) => r.status !== "ok");
+      if (failed.length > 0) {
+        toast.error(`Failed: ${failed.map((r) => `${r.email} (${r.status})`).join(", ")}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -144,6 +167,31 @@ export default function Accounts() {
               </svg>
               Connect Outlook
             </a>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Bulk Import Microsoft Accounts */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Bulk import Microsoft accounts</CardTitle>
+          <CardDescription>
+            Import Outlook / Hotmail / Live accounts. One per line, format: account----password----ssid----token
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <textarea
+              className="flex min-h-[120px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder={"user1@outlook.com----password1----ssid1----refresh_token1\nuser2@hotmail.com----password2----ssid2----refresh_token2"}
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+            />
+            <div className="flex justify-end">
+              <Button onClick={handleImport} disabled={importing || !importText.trim()}>
+                {importing ? "Importing..." : `Import (${importText.trim() ? importText.trim().split("\n").filter((l) => l.trim()).length : 0} accounts)`}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

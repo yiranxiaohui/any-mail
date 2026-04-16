@@ -48,6 +48,52 @@ accounts.post("/", async (c) => {
   return c.json({ ok: true, account: { id, provider: "domain", email, expires_at: expiresAt } }, 201);
 });
 
+/** 批量导入微软邮箱（outlook/hotmail）
+ *  格式：每行一个，字段用 ---- 分隔
+ *  账号----密码----ssid----令牌(refresh_token)
+ */
+accounts.post("/import", async (c) => {
+  const body = await c.req.json<{ text: string }>();
+  if (!body.text?.trim()) {
+    return c.json({ error: "empty input" }, 400);
+  }
+
+  const lines = body.text.trim().split("\n").filter((l) => l.trim());
+  const results: { email: string; status: string }[] = [];
+
+  for (const line of lines) {
+    const parts = line.split("----").map((s) => s.trim());
+    if (parts.length < 4) {
+      results.push({ email: parts[0] || "unknown", status: "invalid format" });
+      continue;
+    }
+
+    const email = parts[0]!;
+    const refreshToken = parts[3]!;
+    if (!email.includes("@")) {
+      results.push({ email, status: "invalid email" });
+      continue;
+    }
+
+    const id = crypto.randomUUID();
+
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO accounts (id, provider, email, refresh_token)
+         VALUES (?, 'outlook', ?, ?)
+         ON CONFLICT(email) DO UPDATE SET refresh_token=?, updated_at=datetime('now')`
+      ).bind(id, email.toLowerCase(), refreshToken, refreshToken).run();
+
+      results.push({ email, status: "ok" });
+    } catch (err) {
+      results.push({ email, status: err instanceof Error ? err.message : "error" });
+    }
+  }
+
+  const success = results.filter((r) => r.status === "ok").length;
+  return c.json({ ok: true, total: lines.length, success, results });
+});
+
 /** 删除账号及其所有邮件 */
 accounts.delete("/:id", async (c) => {
   const id = c.req.param("id");

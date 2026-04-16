@@ -102,6 +102,14 @@ export function createDomainAccount(email: string, expiresAt?: string | null) {
   });
 }
 
+export function importAccounts(text: string) {
+  return request<{ ok: boolean; total: number; success: number; results: { email: string; status: string }[] }>("/api/accounts/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+}
+
 export function deleteAccount(id: string) {
   return request<{ ok: boolean }>(`/api/accounts/${id}`, { method: "DELETE" });
 }
