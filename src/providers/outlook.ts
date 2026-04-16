@@ -6,6 +6,7 @@ const MS_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token
 const GRAPH_API = "https://graph.microsoft.com/v1.0/me";
 
 const SCOPES = "openid email Mail.Read offline_access";
+const GRAPH_SCOPES = "https://graph.microsoft.com/.default offline_access";
 
 /** 生成 PKCE code_verifier 和 code_challenge */
 export async function generatePkce(): Promise<{ codeVerifier: string; codeChallenge: string }> {
@@ -176,6 +177,7 @@ async function refreshOutlookToken(account: Account, creds: OAuthCredentials, db
   }
 
   // 导入账号自带 client_id（公共客户端，无需 client_secret）
+  const useOwnClientId = !!account.client_id;
   const clientId = account.client_id || creds.outlookClientId;
   if (!clientId) {
     throw new Error("No client_id available for this account. Set it in account edit or configure OUTLOOK_CLIENT_ID in Settings.");
@@ -184,34 +186,48 @@ async function refreshOutlookToken(account: Account, creds: OAuthCredentials, db
     throw new Error("No refresh_token available for this account.");
   }
 
+  // 导入账号用 graph.microsoft.com/.default scope，OAuth 账号用标准 scope
+  const tokenEndpoint = useOwnClientId
+    ? "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
+    : MS_TOKEN_URL;
+
   const params: Record<string, string> = {
     client_id: clientId,
     refresh_token: account.refresh_token,
     grant_type: "refresh_token",
-    scope: SCOPES,
+    scope: useOwnClientId ? GRAPH_SCOPES : SCOPES,
   };
-  if (!account.client_id && creds.outlookClientSecret) {
+  if (!useOwnClientId && creds.outlookClientSecret) {
     params.client_secret = creds.outlookClientSecret;
   }
 
-  const res = await fetch(MS_TOKEN_URL, {
+  const res = await fetch(tokenEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams(params),
   });
 
-  const tokenBody = await res.json() as { access_token?: string; expires_in?: number; error?: string; error_description?: string };
+  const tokenBody = await res.json() as { access_token?: string; refresh_token?: string; expires_in?: number; error?: string; error_description?: string };
   if (!tokenBody.access_token) {
     throw new Error(tokenBody.error_description || tokenBody.error || "Failed to refresh token");
   }
 
   const expiresAt = Date.now() + (tokenBody.expires_in ?? 3600) * 1000;
 
-  await db.prepare(
-    "UPDATE accounts SET access_token = ?, token_expires_at = ?, updated_at = datetime('now') WHERE id = ?"
-  )
-    .bind(tokenBody.access_token, expiresAt, account.id)
-    .run();
+  // 微软可能返回新的 refresh_token，一并更新
+  if (tokenBody.refresh_token) {
+    await db.prepare(
+      "UPDATE accounts SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = datetime('now') WHERE id = ?"
+    )
+      .bind(tokenBody.access_token, tokenBody.refresh_token, expiresAt, account.id)
+      .run();
+  } else {
+    await db.prepare(
+      "UPDATE accounts SET access_token = ?, token_expires_at = ?, updated_at = datetime('now') WHERE id = ?"
+    )
+      .bind(tokenBody.access_token, expiresAt, account.id)
+      .run();
+  }
 
   return tokenBody.access_token;
 }
