@@ -1,0 +1,24 @@
+{
+  "name": "any-mail",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 execute any-mail-db --local --file=migrations/0001_init.sql && wrangler d1 execute any-mail-db --local --file=migrations/0002_settings.sql",
+    "db:migrate:remote": "wrangler d1 execute any-mail-db --remote --file=migrations/0001_init.sql && wrangler d1 execute any-mail-db --remote --file=migrations/0002_settings.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260416.2",
+    "@types/bun": "latest",
+    "wrangler": "^4.83.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "hono": "^4.12.14",
+    "postal-mime": "^2.7.4"
+  }
+}

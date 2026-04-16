@@ -1,0 +1,11 @@
+name = "any-mail"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[triggers]
+crons = ["*/1 * * * *"]  # 每分钟轮询一次
+
+[[d1_databases]]
+binding = "DB"
+database_name = "any-mail-db"
+database_id = "placeholder-replace-after-creation"

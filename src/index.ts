@@ -1,0 +1,91 @@
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import type { Env, Account } from "./types";
+import { login, authMiddleware } from "./auth";
+import { handleDomainEmail } from "./providers/domain";
+import { syncGmailEmails } from "./providers/gmail";
+import { syncOutlookEmails } from "./providers/outlook";
+import { getOAuthCredentials } from "./settings";
+import emailsRoute from "./routes/emails";
+import accountsRoute from "./routes/accounts";
+import oauthRoute from "./routes/oauth";
+import settingsRoute from "./routes/settings";
+
+const app = new Hono<{ Bindings: Env }>();
+
+app.use("/*", cors());
+
+// 健康检查
+app.get("/", (c) => c.json({ name: "any-mail", status: "ok" }));
+
+// 登录（不需要 token）
+app.post("/api/auth/login", async (c) => {
+  const body = await c.req.json<{ password: string }>();
+  const token = await login(body.password, c.env);
+  if (!token) {
+    return c.json({ error: "invalid password" }, 401);
+  }
+  return c.json({ token });
+});
+
+// OAuth 回调不需要认证（从第三方跳转回来）
+app.route("/api/oauth", oauthRoute);
+
+// 以下所有 /api/* 路由需要认证
+app.use("/api/*", authMiddleware());
+
+// 路由挂载
+app.route("/api/emails", emailsRoute);
+app.route("/api/accounts", accountsRoute);
+app.route("/api/settings", settingsRoute);
+
+// 手动触发同步
+app.post("/api/sync", async (c) => {
+  const result = await syncAllAccounts(c.env);
+  return c.json(result);
+});
+
+/** 同步所有 Gmail 和 Outlook 账号 */
+async function syncAllAccounts(env: Env) {
+  const creds = await getOAuthCredentials(env);
+  const accounts = await env.DB.prepare(
+    "SELECT * FROM accounts WHERE provider IN ('gmail', 'outlook')"
+  ).all<Account>();
+
+  const results: { email: string; provider: string; synced: number; error?: string }[] = [];
+
+  for (const account of accounts.results) {
+    try {
+      let synced = 0;
+      if (account.provider === "gmail") {
+        synced = await syncGmailEmails(account, creds, env.DB);
+      } else if (account.provider === "outlook") {
+        synced = await syncOutlookEmails(account, creds, env.DB);
+      }
+      results.push({ email: account.email, provider: account.provider, synced });
+    } catch (err) {
+      results.push({
+        email: account.email,
+        provider: account.provider,
+        synced: 0,
+        error: err instanceof Error ? err.message : "unknown error",
+      });
+    }
+  }
+
+  return { ok: true, results };
+}
+
+export default {
+  fetch: app.fetch,
+
+  // Cloudflare Email Worker: 接收域名邮件
+  async email(message: ForwardableEmailMessage, env: Env) {
+    await handleDomainEmail(message, env);
+  },
+
+  // Cron Trigger: 定时轮询 Gmail / Outlook
+  async scheduled(_event: ScheduledEvent, env: Env) {
+    await syncAllAccounts(env);
+  },
+};
