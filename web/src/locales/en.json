@@ -95,6 +95,8 @@
     "show": "Show",
     "hide": "Hide",
     "reauth": "Re-authorize (PKCE)",
+    "reauthPassword": "Refresh Token (via password)",
+    "reauthing": "Refreshing...",
     "reauthSuccess": "Re-authorized {{email}} successfully",
     "reauthFailed": "Re-authorization failed",
     "editExpiresHint": "Leave empty for permanent",

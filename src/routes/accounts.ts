@@ -190,6 +190,50 @@ accounts.patch("/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+/** 用账号密码重新获取 refresh_token (ROPC) */
+accounts.post("/:id/reauth", async (c) => {
+  const id = c.req.param("id");
+  const account = await c.env.DB.prepare(
+    "SELECT id, email, password, client_id FROM accounts WHERE id = ?"
+  ).bind(id).first<{ id: string; email: string; password: string | null; client_id: string | null }>();
+
+  if (!account) return c.json({ error: "not found" }, 404);
+  if (!account.password) return c.json({ error: "no password stored for this account" }, 400);
+  if (!account.client_id) return c.json({ error: "no client_id stored for this account" }, 400);
+
+  const tokenRes = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: account.client_id,
+      grant_type: "password",
+      username: account.email,
+      password: account.password,
+      scope: "openid email Mail.Read offline_access",
+    }),
+  });
+
+  const token = await tokenRes.json() as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    error?: string;
+    error_description?: string;
+  };
+
+  if (!token.access_token) {
+    return c.json({ error: token.error_description || token.error || "ROPC auth failed" }, 400);
+  }
+
+  const expiresAt = Date.now() + (token.expires_in ?? 3600) * 1000;
+
+  await c.env.DB.prepare(
+    "UPDATE accounts SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = datetime('now') WHERE id = ?"
+  ).bind(token.access_token, token.refresh_token ?? "", expiresAt, id).run();
+
+  return c.json({ ok: true, email: account.email });
+});
+
 /** 删除账号及其所有邮件 */
 accounts.delete("/:id", async (c) => {
   const id = c.req.param("id");

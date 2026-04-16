@@ -95,6 +95,8 @@
     "show": "显示",
     "hide": "隐藏",
     "reauth": "重新授权 (PKCE)",
+    "reauthPassword": "重新获取令牌（密码方式）",
+    "reauthing": "获取中...",
     "reauthSuccess": "{{email}} 重新授权成功",
     "reauthFailed": "重新授权失败",
     "editExpiresHint": "留空表示永久有效",

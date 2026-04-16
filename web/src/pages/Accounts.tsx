@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getAccounts, getAccount, getEmails, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, gmailAuthUrl, outlookAuthUrl, outlookReauthUrl, type Account, type Email } from "@/lib/api";
+import { getAccounts, getAccount, getEmails, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, gmailAuthUrl, outlookAuthUrl, type Account, type Email } from "@/lib/api";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +49,7 @@ export default function Accounts() {
   const [saving, setSaving] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [reauthing, setReauthing] = useState(false);
 
   const fetchAccounts = async (s = debouncedSearch, prov = filterProvider, p = page, ps = pageSize) => {
     setLoading(true);
@@ -454,16 +455,42 @@ export default function Accounts() {
                       placeholder="Refresh Token"
                     />
                   </div>
-                  {editClientId && (
-                    <a
-                      href={outlookReauthUrl(editClientId)}
-                      className="flex items-center justify-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+                  {editAccount && editClientId && editPassword && (
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      disabled={reauthing}
+                      onClick={async () => {
+                        setReauthing(true);
+                        try {
+                          // 先保存当前编辑（确保密码/client_id 已存储）
+                          await updateAccount(editAccount.id, {
+                            email: editEmail.trim().toLowerCase(),
+                            password: editPassword || null,
+                            client_id: editClientId || null,
+                            refresh_token: editRefreshToken || null,
+                          });
+                          const res = await reauthAccount(editAccount.id);
+                          if (res.ok) {
+                            toast.success(t("accounts.reauthSuccess", { email: res.email || "" }));
+                            // 刷新令牌
+                            const detail = await getAccount(editAccount.id);
+                            setEditRefreshToken(detail.refresh_token ?? "");
+                          } else {
+                            toast.error(res.error || t("accounts.reauthFailed"));
+                          }
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : t("accounts.reauthFailed"));
+                        } finally {
+                          setReauthing(false);
+                        }
+                      }}
                     >
-                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg className="mr-1.5 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
                       </svg>
-                      {t("accounts.reauth")}
-                    </a>
+                      {reauthing ? t("accounts.reauthing") : t("accounts.reauthPassword")}
+                    </Button>
                   )}
                 </>
               )}

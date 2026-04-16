@@ -142,6 +142,13 @@ export function triggerSync() {
   );
 }
 
+// Re-auth account via ROPC (password grant)
+export function reauthAccount(id: string) {
+  return request<{ ok: boolean; email?: string; error?: string }>(`/api/accounts/${id}/reauth`, {
+    method: "POST",
+  });
+}
+
 // Sync single account
 export function syncAccount(id: string) {
   return request<{ ok: boolean; email: string; provider: string; synced: number; error?: string }>(`/api/accounts/${id}/sync`, {
