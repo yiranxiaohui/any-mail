@@ -20,6 +20,8 @@ jobs:
 
       - name: Build frontend
         run: cd web && bun run build
+        env:
+          VITE_API_BASE: ${{ secrets.WORKER_URL }}
 
       - name: Ensure D1 database exists
         uses: cloudflare/wrangler-action@v3
@@ -90,3 +92,10 @@ jobs:
               "ADMIN_PASSWORD": "${{ secrets.ADMIN_PASSWORD }}",
               "JWT_SECRET": "${{ secrets.JWT_SECRET }}"
             }
+
+      - name: Deploy frontend to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy web/dist --project-name=any-mail --branch=main
