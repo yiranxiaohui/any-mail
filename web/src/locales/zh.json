@@ -75,6 +75,7 @@
     "expired": "已过期",
     "expires": "{{date}} 过期",
     "searchPlaceholder": "搜索账户...",
+    "perPage": "每页",
     "pageInfo": "{{from}}-{{to}} / 共 {{total}} 个",
     "prev": "上一页",
     "next": "下一页",

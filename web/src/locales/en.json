@@ -75,6 +75,7 @@
     "expired": "Expired",
     "expires": "Expires {{date}}",
     "searchPlaceholder": "Search accounts...",
+    "perPage": "Per page",
     "pageInfo": "{{from}}-{{to}} of {{total}}",
     "prev": "Previous",
     "next": "Next",

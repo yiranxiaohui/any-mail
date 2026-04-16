@@ -26,7 +26,7 @@ export default function Accounts() {
   // Search & Pagination
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const [pageSize, setPageSize] = useState(20);
 
   // Edit
   const [editAccount, setEditAccount] = useState<Account | null>(null);
@@ -362,24 +362,33 @@ export default function Accounts() {
             ))}
           </div>
         )}
-        {filteredAccounts.length > pageSize && (
-          <>
-            <Separator />
-            <div className="flex items-center justify-between px-6 py-3">
-              <span className="text-xs text-muted-foreground">
-                {t("accounts.pageInfo", { from: (currentPage - 1) * pageSize + 1, to: Math.min(currentPage * pageSize, filteredAccounts.length), total: filteredAccounts.length })}
-              </span>
-              <div className="flex gap-1">
-                <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
-                  {t("accounts.prev")}
-                </Button>
-                <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
-                  {t("accounts.next")}
-                </Button>
-              </div>
-            </div>
-          </>
-        )}
+        <Separator />
+        <div className="flex items-center justify-between px-6 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{t("accounts.perPage")}</span>
+            <select
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+              className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span className="text-xs text-muted-foreground">
+              {t("accounts.pageInfo", { from: (currentPage - 1) * pageSize + 1, to: Math.min(currentPage * pageSize, filteredAccounts.length), total: filteredAccounts.length })}
+            </span>
+          </div>
+          <div className="flex gap-1">
+            <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
+              {t("accounts.prev")}
+            </Button>
+            <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
+              {t("accounts.next")}
+            </Button>
+          </div>
+        </div>
       </Card>
     </div>
   );
