@@ -64,14 +64,24 @@ accounts.post("/import", async (c) => {
 
   for (const line of lines) {
     const parts = line.split("----").map((s) => s.trim());
-    if (parts.length < 4) {
+    if (parts.length < 3) {
       results.push({ email: parts[0] || "unknown", status: "invalid format" });
       continue;
     }
 
-    const email = parts[0]!;
-    const clientId = parts[2]!;
-    const refreshToken = parts[3]!;
+    let email: string;
+    let clientId: string;
+    let refreshToken: string;
+
+    if (parts.length === 3) {
+      // 格式: 邮箱----client_id----refresh_token
+      [email, clientId, refreshToken] = parts as [string, string, string];
+    } else {
+      // 格式: 邮箱----密码----client_id----refresh_token
+      email = parts[0]!;
+      clientId = parts[2]!;
+      refreshToken = parts[3]!;
+    }
     if (!email.includes("@")) {
       results.push({ email, status: "invalid email" });
       continue;
