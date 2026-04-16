@@ -92,6 +92,8 @@
       "refreshToken": "Refresh Token",
       "expiresAt": "Expires At"
     },
+    "show": "Show",
+    "hide": "Hide",
     "reauth": "Re-authorize (PKCE)",
     "reauthSuccess": "Re-authorized {{email}} successfully",
     "reauthFailed": "Re-authorization failed",

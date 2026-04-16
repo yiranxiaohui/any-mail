@@ -48,6 +48,7 @@ export default function Accounts() {
   const [editExpiry, setEditExpiry] = useState("");
   const [saving, setSaving] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const fetchAccounts = async (s = debouncedSearch, prov = filterProvider, p = page, ps = pageSize) => {
     setLoading(true);
@@ -150,6 +151,7 @@ export default function Accounts() {
     setEditEmail(account.email);
     setEditExpiry(account.expires_at ?? "");
     setEditPassword("");
+    setShowPassword(false);
     setEditClientId("");
     setEditRefreshToken("");
     setEditLoading(true);
@@ -423,12 +425,18 @@ export default function Accounts() {
                 <>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium">{t("accounts.editFields.password")}</label>
-                    <Input
-                      type="password"
-                      value={editPassword}
-                      onChange={(e) => setEditPassword(e.target.value)}
-                      placeholder={t("accounts.editFields.password")}
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        value={editPassword}
+                        onChange={(e) => setEditPassword(e.target.value)}
+                        placeholder={t("accounts.editFields.password")}
+                        className="flex-1"
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={() => setShowPassword(!showPassword)}>
+                        {showPassword ? t("accounts.hide") : t("accounts.show")}
+                      </Button>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium">{t("accounts.editFields.clientId")}</label>

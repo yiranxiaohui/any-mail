@@ -92,6 +92,8 @@
       "refreshToken": "令牌",
       "expiresAt": "有效期"
     },
+    "show": "显示",
+    "hide": "隐藏",
     "reauth": "重新授权 (PKCE)",
     "reauthSuccess": "{{email}} 重新授权成功",
     "reauthFailed": "重新授权失败",
