@@ -201,7 +201,7 @@ accounts.post("/:id/reauth", async (c) => {
   if (!account.password) return c.json({ error: "no password stored for this account" }, 400);
   if (!account.client_id) return c.json({ error: "no client_id stored for this account" }, 400);
 
-  const tokenRes = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", {
+  const tokenRes = await fetch("https://login.microsoftonline.com/organizations/oauth2/v2.0/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
