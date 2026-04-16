@@ -6,7 +6,7 @@ const accounts = new Hono<{ Bindings: Env }>();
 /** 列出所有绑定的邮箱账号 */
 accounts.get("/", async (c) => {
   const result = await c.env.DB.prepare(
-    "SELECT id, provider, email, created_at, updated_at FROM accounts ORDER BY created_at DESC"
+    "SELECT id, provider, email, expires_at, created_at, updated_at FROM accounts ORDER BY created_at DESC"
   ).all();
   return c.json({ accounts: result.results });
 });
@@ -15,7 +15,7 @@ accounts.get("/", async (c) => {
 accounts.get("/:id", async (c) => {
   const id = c.req.param("id");
   const account = await c.env.DB.prepare(
-    "SELECT id, provider, email, created_at, updated_at FROM accounts WHERE id = ?"
+    "SELECT id, provider, email, expires_at, created_at, updated_at FROM accounts WHERE id = ?"
   )
     .bind(id)
     .first();
@@ -24,15 +24,14 @@ accounts.get("/:id", async (c) => {
   return c.json(account);
 });
 
-/** 创建域名邮箱账号 */
+/** 创建域名邮箱账号，支持过期时间 */
 accounts.post("/", async (c) => {
-  const body = await c.req.json<{ email: string }>();
+  const body = await c.req.json<{ email: string; expires_at?: string | null }>();
   const email = body.email?.trim().toLowerCase();
   if (!email || !email.includes("@")) {
     return c.json({ error: "invalid email" }, 400);
   }
 
-  // 检查是否已存在
   const existing = await c.env.DB.prepare(
     "SELECT id FROM accounts WHERE email = ? AND provider = 'domain'"
   ).bind(email).first();
@@ -41,11 +40,12 @@ accounts.post("/", async (c) => {
   }
 
   const id = crypto.randomUUID();
+  const expiresAt = body.expires_at ?? null;
   await c.env.DB.prepare(
-    "INSERT INTO accounts (id, provider, email) VALUES (?, 'domain', ?)"
-  ).bind(id, email).run();
+    "INSERT INTO accounts (id, provider, email, expires_at) VALUES (?, 'domain', ?, ?)"
+  ).bind(id, email, expiresAt).run();
 
-  return c.json({ ok: true, account: { id, provider: "domain", email } }, 201);
+  return c.json({ ok: true, account: { id, provider: "domain", email, expires_at: expiresAt } }, 201);
 });
 
 /** 删除账号及其所有邮件 */

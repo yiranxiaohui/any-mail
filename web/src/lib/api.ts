@@ -6,6 +6,7 @@ export interface Account {
   id: string;
   provider: "domain" | "gmail" | "outlook";
   email: string;
+  expires_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -84,11 +85,11 @@ export function getAccounts() {
   return request<{ accounts: Account[] }>("/api/accounts");
 }
 
-export function createDomainAccount(email: string) {
+export function createDomainAccount(email: string, expiresAt?: string | null) {
   return request<{ ok: boolean; account: Account }>("/api/accounts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, expires_at: expiresAt ?? null }),
   });
 }
 

@@ -11,6 +11,7 @@ export default function Accounts() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [newEmail, setNewEmail] = useState("");
+  const [expiry, setExpiry] = useState("permanent");
   const [creating, setCreating] = useState(false);
 
   const fetchAccounts = async () => {
@@ -27,13 +28,23 @@ export default function Accounts() {
     fetchAccounts();
   }, []);
 
+  const getExpiresAt = (): string | null => {
+    if (expiry === "permanent") return null;
+    const now = new Date();
+    const hours = parseInt(expiry);
+    now.setHours(now.getHours() + hours);
+    return now.toISOString();
+  };
+
   const handleCreateDomain = async () => {
     if (!newEmail.trim()) return;
     setCreating(true);
     try {
-      const res = await createDomainAccount(newEmail.trim());
-      setAccounts((prev) => [{ ...res.account, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, ...prev]);
+      const expiresAt = getExpiresAt();
+      const res = await createDomainAccount(newEmail.trim(), expiresAt);
+      setAccounts((prev) => [{ ...res.account, expires_at: expiresAt, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, ...prev]);
       setNewEmail("");
+      setExpiry("permanent");
       toast.success(`Created ${res.account.email}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create account");
@@ -74,7 +85,21 @@ export default function Accounts() {
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreateDomain()}
+              className="flex-1"
             />
+            <select
+              value={expiry}
+              onChange={(e) => setExpiry(e.target.value)}
+              className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="permanent">Permanent</option>
+              <option value="1">1 hour</option>
+              <option value="6">6 hours</option>
+              <option value="24">1 day</option>
+              <option value="72">3 days</option>
+              <option value="168">7 days</option>
+              <option value="720">30 days</option>
+            </select>
             <Button onClick={handleCreateDomain} disabled={creating || !newEmail.trim()}>
               {creating ? "Creating..." : "Create"}
             </Button>
@@ -161,6 +186,11 @@ export default function Accounts() {
                     </div>
                     <span className="text-xs text-muted-foreground">
                       Connected {new Date(account.created_at).toLocaleDateString()}
+                      {account.expires_at && (
+                        new Date(account.expires_at) < new Date()
+                          ? " · Expired"
+                          : ` · Expires ${new Date(account.expires_at).toLocaleString()}`
+                      )}
                     </span>
                   </div>
                 </div>

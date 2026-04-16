@@ -70,6 +70,13 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 execute any-mail-db --remote --file=migrations/0002_settings.sql
 
+      - name: Run database migrations (account expires)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute any-mail-db --remote --file=migrations/0003_account_expires.sql
+
       - name: Deploy Worker
         shell: bash
         run: |
