@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getAccounts, deleteAccount, createDomainAccount, importAccounts, gmailAuthUrl, outlookAuthUrl, type Account } from "@/lib/api";
+import { getAccounts, deleteAccount, updateAccount, createDomainAccount, importAccounts, gmailAuthUrl, outlookAuthUrl, type Account } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +22,12 @@ export default function Accounts() {
 
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
+
+  // Edit
+  const [editAccount, setEditAccount] = useState<Account | null>(null);
+  const [editEmail, setEditEmail] = useState("");
+  const [editExpiry, setEditExpiry] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const fetchAccounts = async () => {
     setLoading(true);
@@ -93,6 +99,30 @@ export default function Accounts() {
     await deleteAccount(id);
     setAccounts((prev) => prev.filter((a) => a.id !== id));
     toast.success(t("accounts.removed", { email }));
+  };
+
+  const openEdit = (account: Account) => {
+    setEditAccount(account);
+    setEditEmail(account.email);
+    setEditExpiry(account.expires_at ?? "");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editAccount) return;
+    setSaving(true);
+    try {
+      await updateAccount(editAccount.id, {
+        email: editEmail.trim().toLowerCase(),
+        expires_at: editExpiry || null,
+      });
+      toast.success(t("settings.saved"));
+      setEditAccount(null);
+      fetchAccounts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.saveFailed"));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const importLineCount = importText.trim() ? importText.trim().split("\n").filter((l) => l.trim()).length : 0;
@@ -209,6 +239,38 @@ export default function Accounts() {
         </DialogContent>
       </Dialog>
 
+      {/* Edit Account Dialog */}
+      <Dialog open={!!editAccount} onOpenChange={(open) => { if (!open) setEditAccount(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("accounts.editTitle")}</DialogTitle>
+            <DialogDescription>{editAccount?.email}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">{t("compose.from")}</label>
+              <Input
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">{t("accounts.domain.expires")}</label>
+              <Input
+                type="datetime-local"
+                value={editExpiry ? editExpiry.slice(0, 16) : ""}
+                onChange={(e) => setEditExpiry(e.target.value ? new Date(e.target.value).toISOString() : "")}
+              />
+              <p className="text-xs text-muted-foreground">{t("accounts.editExpiresHint")}</p>
+            </div>
+            <Button className="w-full" onClick={handleSaveEdit} disabled={saving}>
+              {saving ? t("settings.saving") : t("settings.save")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t("accounts.connectedAccounts")}</CardTitle>
@@ -256,14 +318,23 @@ export default function Accounts() {
                     </span>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => handleDelete(account.id, account.email)}
-                >
-                  {t("accounts.remove")}
-                </Button>
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openEdit(account)}
+                  >
+                    {t("accounts.edit")}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => handleDelete(account.id, account.email)}
+                  >
+                    {t("accounts.remove")}
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

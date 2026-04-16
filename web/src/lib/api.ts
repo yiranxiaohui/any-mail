@@ -110,6 +110,14 @@ export function importAccounts(text: string) {
   });
 }
 
+export function updateAccount(id: string, data: { email?: string; expires_at?: string | null }) {
+  return request<{ ok: boolean }>(`/api/accounts/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
 export function deleteAccount(id: string) {
   return request<{ ok: boolean }>(`/api/accounts/${id}`, { method: "DELETE" });
 }

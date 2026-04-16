@@ -110,6 +110,45 @@ accounts.post("/import", async (c) => {
   return c.json({ ok: true, total: lines.length, success, results });
 });
 
+/** 编辑账号信息 */
+accounts.patch("/:id", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json<{ email?: string; expires_at?: string | null; client_id?: string | null; refresh_token?: string | null }>();
+
+  const fields: string[] = [];
+  const values: (string | null)[] = [];
+
+  if (body.email !== undefined) {
+    fields.push("email = ?");
+    values.push(body.email.trim().toLowerCase());
+  }
+  if (body.expires_at !== undefined) {
+    fields.push("expires_at = ?");
+    values.push(body.expires_at);
+  }
+  if (body.client_id !== undefined) {
+    fields.push("client_id = ?");
+    values.push(body.client_id);
+  }
+  if (body.refresh_token !== undefined) {
+    fields.push("refresh_token = ?");
+    values.push(body.refresh_token);
+  }
+
+  if (fields.length === 0) {
+    return c.json({ error: "no fields to update" }, 400);
+  }
+
+  fields.push("updated_at = datetime('now')");
+  values.push(id);
+
+  await c.env.DB.prepare(
+    `UPDATE accounts SET ${fields.join(", ")} WHERE id = ?`
+  ).bind(...values).run();
+
+  return c.json({ ok: true });
+});
+
 /** 删除账号及其所有邮件 */
 accounts.delete("/:id", async (c) => {
   const id = c.req.param("id");
