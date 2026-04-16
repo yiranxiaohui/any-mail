@@ -48,14 +48,14 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 create any-mail-db --json
+          command: d1 create any-mail-db
         id: d1_create
 
       - name: Set D1 database ID from creation
         if: env.CREATE_DB == 'true'
         shell: bash
         run: |
-          DB_ID=$(echo '${{ steps.d1_create.outputs.command-output }}' | jq -r '.uuid')
+          DB_ID=$(echo '${{ steps.d1_create.outputs.command-output }}' | grep -oP '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
           echo "D1_DATABASE_ID=$DB_ID" >> $GITHUB_ENV
           sed -i "s/placeholder-replace-after-creation/$DB_ID/" wrangler.toml
 
