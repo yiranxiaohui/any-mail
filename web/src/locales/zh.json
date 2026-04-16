@@ -92,6 +92,9 @@
       "refreshToken": "令牌",
       "expiresAt": "有效期"
     },
+    "reauth": "重新授权 (PKCE)",
+    "reauthSuccess": "{{email}} 重新授权成功",
+    "reauthFailed": "重新授权失败",
     "editExpiresHint": "留空表示永久有效",
     "remove": "移除",
     "removeConfirm": "确定删除账户 {{email}} 及其所有邮件？",

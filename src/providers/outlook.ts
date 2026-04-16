@@ -7,6 +7,18 @@ const GRAPH_API = "https://graph.microsoft.com/v1.0/me";
 
 const SCOPES = "openid email Mail.Read offline_access";
 
+/** 生成 PKCE code_verifier 和 code_challenge */
+export async function generatePkce(): Promise<{ codeVerifier: string; codeChallenge: string }> {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  const codeVerifier = btoa(String.fromCharCode(...array))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(codeVerifier));
+  const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return { codeVerifier, codeChallenge };
+}
+
 /** 生成 Outlook OAuth 授权链接 */
 export function getOutlookAuthUrl(creds: OAuthCredentials, origin: string): string {
   const params = new URLSearchParams({
@@ -17,6 +29,85 @@ export function getOutlookAuthUrl(creds: OAuthCredentials, origin: string): stri
     response_mode: "query",
   });
   return `${MS_AUTH_URL}?${params}`;
+}
+
+/** 生成 PKCE 模式的 Outlook OAuth 授权链接（用账号自带的 client_id） */
+export function getOutlookPkceAuthUrl(clientId: string, origin: string, codeChallenge: string, state: string): string {
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: `${origin}/api/oauth/outlook/pkce-callback`,
+    response_type: "code",
+    scope: SCOPES,
+    response_mode: "query",
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+    state,
+  });
+  return `${MS_AUTH_URL}?${params}`;
+}
+
+/** PKCE 模式用 authorization code 换取 token（无需 client_secret） */
+export async function handleOutlookPkceCallback(code: string, clientId: string, codeVerifier: string, origin: string, db: D1Database): Promise<Account> {
+  const tokenRes = await fetch(MS_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      code,
+      client_id: clientId,
+      redirect_uri: `${origin}/api/oauth/outlook/pkce-callback`,
+      grant_type: "authorization_code",
+      code_verifier: codeVerifier,
+      scope: SCOPES,
+    }),
+  });
+
+  const token = (await tokenRes.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    error?: string;
+    error_description?: string;
+  };
+
+  if (!token.access_token) {
+    throw new Error(token.error_description || token.error || "Failed to exchange code for token");
+  }
+
+  const profileRes = await fetch(GRAPH_API, {
+    headers: { Authorization: `Bearer ${token.access_token}` },
+  });
+  const profile = (await profileRes.json()) as { mail?: string; userPrincipalName: string };
+  const email = (profile.mail ?? profile.userPrincipalName).toLowerCase();
+
+  const id = crypto.randomUUID();
+  const expiresAt = Date.now() + (token.expires_in ?? 3600) * 1000;
+
+  await db.prepare(
+    `INSERT INTO accounts (id, provider, email, client_id, access_token, refresh_token, token_expires_at)
+     VALUES (?, 'outlook', ?, ?, ?, ?, ?)
+     ON CONFLICT(email) DO UPDATE SET client_id=?, access_token=?, refresh_token=?, token_expires_at=?, updated_at=datetime('now')`
+  )
+    .bind(
+      id, email, clientId,
+      token.access_token, token.refresh_token ?? "", expiresAt,
+      clientId, token.access_token, token.refresh_token ?? "", expiresAt
+    )
+    .run();
+
+  return {
+    id,
+    provider: "outlook",
+    email,
+    access_token: token.access_token,
+    refresh_token: token.refresh_token ?? "",
+    token_expires_at: expiresAt,
+    last_sync_history_id: null,
+    password: null,
+    client_id: clientId,
+    expires_at: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
 }
 
 /** 用 authorization code 换取 token */

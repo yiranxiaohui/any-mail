@@ -92,6 +92,9 @@
       "refreshToken": "Refresh Token",
       "expiresAt": "Expires At"
     },
+    "reauth": "Re-authorize (PKCE)",
+    "reauthSuccess": "Re-authorized {{email}} successfully",
+    "reauthFailed": "Re-authorization failed",
     "editExpiresHint": "Leave empty for permanent",
     "remove": "Remove",
     "removeConfirm": "Delete account {{email}} and all its emails?",
