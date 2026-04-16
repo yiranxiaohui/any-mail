@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { getAccounts, deleteAccount, gmailAuthUrl, outlookAuthUrl, type Account } from "@/lib/api";
+import { getAccounts, deleteAccount, createDomainAccount, gmailAuthUrl, outlookAuthUrl, type Account } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import ProviderBadge from "@/components/ProviderBadge";
@@ -9,6 +10,8 @@ import { toast } from "sonner";
 export default function Accounts() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
+  const [newEmail, setNewEmail] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const fetchAccounts = async () => {
     setLoading(true);
@@ -23,6 +26,21 @@ export default function Accounts() {
   useEffect(() => {
     fetchAccounts();
   }, []);
+
+  const handleCreateDomain = async () => {
+    if (!newEmail.trim()) return;
+    setCreating(true);
+    try {
+      const res = await createDomainAccount(newEmail.trim());
+      setAccounts((prev) => [{ ...res.account, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, ...prev]);
+      setNewEmail("");
+      toast.success(`Created ${res.account.email}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create account");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const handleDelete = async (id: string, email: string) => {
     if (!confirm(`Delete account ${email} and all its emails?`)) return;
@@ -39,6 +57,30 @@ export default function Accounts() {
           Manage your connected email accounts
         </p>
       </div>
+
+      {/* Domain Email */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Create domain email</CardTitle>
+          <CardDescription>
+            Add an email address on your domain (requires Cloudflare Email Routing)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-3">
+            <Input
+              type="email"
+              placeholder="hello@yourdomain.com"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreateDomain()}
+            />
+            <Button onClick={handleCreateDomain} disabled={creating || !newEmail.trim()}>
+              {creating ? "Creating..." : "Create"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Add Account */}
       <Card>

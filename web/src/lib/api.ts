@@ -84,6 +84,14 @@ export function getAccounts() {
   return request<{ accounts: Account[] }>("/api/accounts");
 }
 
+export function createDomainAccount(email: string) {
+  return request<{ ok: boolean; account: Account }>("/api/accounts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+}
+
 export function deleteAccount(id: string) {
   return request<{ ok: boolean }>(`/api/accounts/${id}`, { method: "DELETE" });
 }

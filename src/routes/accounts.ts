@@ -24,6 +24,30 @@ accounts.get("/:id", async (c) => {
   return c.json(account);
 });
 
+/** 创建域名邮箱账号 */
+accounts.post("/", async (c) => {
+  const body = await c.req.json<{ email: string }>();
+  const email = body.email?.trim().toLowerCase();
+  if (!email || !email.includes("@")) {
+    return c.json({ error: "invalid email" }, 400);
+  }
+
+  // 检查是否已存在
+  const existing = await c.env.DB.prepare(
+    "SELECT id FROM accounts WHERE email = ? AND provider = 'domain'"
+  ).bind(email).first();
+  if (existing) {
+    return c.json({ error: "account already exists" }, 409);
+  }
+
+  const id = crypto.randomUUID();
+  await c.env.DB.prepare(
+    "INSERT INTO accounts (id, provider, email) VALUES (?, 'domain', ?)"
+  ).bind(id, email).run();
+
+  return c.json({ ok: true, account: { id, provider: "domain", email } }, 201);
+});
+
 /** 删除账号及其所有邮件 */
 accounts.delete("/:id", async (c) => {
   const id = c.req.param("id");
