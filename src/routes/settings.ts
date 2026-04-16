@@ -92,21 +92,21 @@ settings.get("/domains", async (c) => {
     // 主域本身
     domains.push({ id: zone.id, name: zone.name, status: zone.status });
 
-    // 获取 Email Routing 子域
+    // 通过 DNS MX 记录提取 Email Routing 子域
     try {
-      const subRes = await fetch(
-        `https://api.cloudflare.com/client/v4/zones/${zone.id}/email/routing/dns`,
+      const dnsRes = await fetch(
+        `https://api.cloudflare.com/client/v4/zones/${zone.id}/dns_records?type=MX&per_page=100`,
         { headers: { Authorization: `Bearer ${apiToken}` } }
       );
-      const subData = await subRes.json() as {
+      const dnsData = await dnsRes.json() as {
         success: boolean;
-        result?: { name?: string; type?: string; content?: string }[];
+        result?: { name: string; type: string; content: string }[];
       };
-      if (subData.success && subData.result) {
-        // 从 MX 记录中提取子域名
+      if (dnsData.success && dnsData.result) {
         const subdomains = new Set<string>();
-        for (const record of subData.result) {
-          if (record.type === "MX" && record.name && record.name !== zone.name) {
+        for (const record of dnsData.result) {
+          // 所有非主域的 MX 子域
+          if (record.name !== zone.name) {
             subdomains.add(record.name);
           }
         }
