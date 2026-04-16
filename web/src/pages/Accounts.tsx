@@ -4,15 +4,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import ProviderBadge from "@/components/ProviderBadge";
 import { toast } from "sonner";
 
 export default function Accounts() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Domain form
   const [newEmail, setNewEmail] = useState("");
   const [expiry, setExpiry] = useState("permanent");
   const [creating, setCreating] = useState(false);
+
+  // Import form
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
 
@@ -51,6 +58,7 @@ export default function Accounts() {
       setAccounts((prev) => [{ ...res.account, expires_at: expiresAt, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, ...prev]);
       setNewEmail("");
       setExpiry("permanent");
+      setDialogOpen(false);
       toast.success(`Created ${res.account.email}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create account");
@@ -67,6 +75,7 @@ export default function Accounts() {
       toast.success(`Imported ${res.success}/${res.total} accounts`);
       if (res.success > 0) {
         setImportText("");
+        setDialogOpen(false);
         fetchAccounts();
       }
       const failed = res.results.filter((r) => r.status !== "ok");
@@ -87,114 +96,135 @@ export default function Accounts() {
     toast.success(`Removed ${email}`);
   };
 
+  const importLineCount = importText.trim() ? importText.trim().split("\n").filter((l) => l.trim()).length : 0;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Accounts</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage your connected email accounts
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Accounts</h1>
+          <p className="text-sm text-muted-foreground">
+            Manage your connected email accounts
+          </p>
+        </div>
+        <Button onClick={() => setDialogOpen(true)}>
+          <svg className="mr-1.5 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" x2="12" y1="5" y2="19" />
+            <line x1="5" x2="19" y1="12" y2="12" />
+          </svg>
+          Add Account
+        </Button>
       </div>
 
-      {/* Domain Email */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Create domain email</CardTitle>
-          <CardDescription>
-            Add an email address on your domain (requires Cloudflare Email Routing)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-3">
-            <Input
-              type="email"
-              placeholder="user@yourdomain.com"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleCreateDomain()}
-              className="flex-1"
-            />
-            <select
-              value={expiry}
-              onChange={(e) => setExpiry(e.target.value)}
-              className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="permanent">Permanent</option>
-              <option value="1">1 hour</option>
-              <option value="6">6 hours</option>
-              <option value="24">1 day</option>
-              <option value="72">3 days</option>
-              <option value="168">7 days</option>
-              <option value="720">30 days</option>
-            </select>
-            <Button onClick={handleCreateDomain} disabled={creating || !newEmail.trim()}>
-              {creating ? "Creating..." : "Create"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Add Account Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Account</DialogTitle>
+            <DialogDescription>Choose account type to create or import</DialogDescription>
+          </DialogHeader>
 
-      {/* Add Account */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Connect a new account</CardTitle>
-          <CardDescription>
-            Link your Gmail or Outlook account to start receiving emails
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-3">
-            <a
-              href={gmailAuthUrl}
-              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium bg-[#ea4335] text-white hover:bg-[#d33426] transition-colors"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-              </svg>
-              Connect Gmail
-            </a>
-            <a
-              href={outlookAuthUrl}
-              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium bg-[#0078d4] text-white hover:bg-[#006abc] transition-colors"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M24 7.387v10.478c0 .23-.08.424-.238.576-.16.154-.352.232-.578.232h-8.15v-6.455l1.675 1.23a.261.261 0 0 0 .317-.002l6.974-5.067V7.387z" />
-                <path d="M15.034 11.262v-5.34c0-.233.08-.43.24-.587.16-.16.354-.238.58-.238h1.235l6.556 4.752-8.61 6.252V11.26z" />
-                <path d="M7 18c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6zm0-9.5c-1.9 0-3.5 1.6-3.5 3.5S5.1 15.5 7 15.5s3.5-1.6 3.5-3.5S8.9 8.5 7 8.5z" />
-              </svg>
-              Connect Outlook
-            </a>
-          </div>
-        </CardContent>
-      </Card>
+          <Tabs defaultValue="domain">
+            <TabsList className="w-full">
+              <TabsTrigger value="domain">Domain</TabsTrigger>
+              <TabsTrigger value="oauth">OAuth</TabsTrigger>
+              <TabsTrigger value="import">Bulk Import</TabsTrigger>
+            </TabsList>
 
-      {/* Bulk Import Microsoft Accounts */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Bulk import Microsoft accounts</CardTitle>
-          <CardDescription>
-            Import Outlook / Hotmail / Live accounts. One per line, format: account----password----ssid----token
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <textarea
-              className="flex min-h-[120px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder={"user1@outlook.com----password1----ssid1----refresh_token1\nuser2@hotmail.com----password2----ssid2----refresh_token2"}
-              value={importText}
-              onChange={(e) => setImportText(e.target.value)}
-            />
-            <div className="flex justify-end">
-              <Button onClick={handleImport} disabled={importing || !importText.trim()}>
-                {importing ? "Importing..." : `Import (${importText.trim() ? importText.trim().split("\n").filter((l) => l.trim()).length : 0} accounts)`}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            {/* Domain Email */}
+            <TabsContent value="domain">
+              <div className="space-y-4 pt-2">
+                <p className="text-sm text-muted-foreground">
+                  Create an email address on your domain (requires Cloudflare Email Routing)
+                </p>
+                <div className="space-y-3">
+                  <Input
+                    type="email"
+                    placeholder="user@yourdomain.com"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleCreateDomain()}
+                  />
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm font-medium shrink-0">Expires</label>
+                    <select
+                      value={expiry}
+                      onChange={(e) => setExpiry(e.target.value)}
+                      className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="permanent">Permanent</option>
+                      <option value="1">1 hour</option>
+                      <option value="6">6 hours</option>
+                      <option value="24">1 day</option>
+                      <option value="72">3 days</option>
+                      <option value="168">7 days</option>
+                      <option value="720">30 days</option>
+                    </select>
+                  </div>
+                  <Button className="w-full" onClick={handleCreateDomain} disabled={creating || !newEmail.trim()}>
+                    {creating ? "Creating..." : "Create"}
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* OAuth */}
+            <TabsContent value="oauth">
+              <div className="space-y-4 pt-2">
+                <p className="text-sm text-muted-foreground">
+                  Connect your Gmail or Outlook account via OAuth
+                </p>
+                <div className="space-y-3">
+                  <a
+                    href={gmailAuthUrl}
+                    className="flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium bg-[#ea4335] text-white hover:bg-[#d33426] transition-colors"
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                    </svg>
+                    Connect Gmail
+                  </a>
+                  <a
+                    href={outlookAuthUrl}
+                    className="flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium bg-[#0078d4] text-white hover:bg-[#006abc] transition-colors"
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M24 7.387v10.478c0 .23-.08.424-.238.576-.16.154-.352.232-.578.232h-8.15v-6.455l1.675 1.23a.261.261 0 0 0 .317-.002l6.974-5.067V7.387z" />
+                      <path d="M15.034 11.262v-5.34c0-.233.08-.43.24-.587.16-.16.354-.238.58-.238h1.235l6.556 4.752-8.61 6.252V11.26z" />
+                      <path d="M7 18c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6zm0-9.5c-1.9 0-3.5 1.6-3.5 3.5S5.1 15.5 7 15.5s3.5-1.6 3.5-3.5S8.9 8.5 7 8.5z" />
+                    </svg>
+                    Connect Outlook
+                  </a>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* Bulk Import */}
+            <TabsContent value="import">
+              <div className="space-y-4 pt-2">
+                <p className="text-sm text-muted-foreground">
+                  Import Outlook / Hotmail / Live accounts in bulk. One per line:
+                </p>
+                <code className="block rounded-md bg-muted px-3 py-2 text-xs font-mono">
+                  account----password----ssid----token
+                </code>
+                <textarea
+                  className="flex min-h-[120px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  placeholder={"user1@outlook.com----pass1----ssid1----token1\nuser2@hotmail.com----pass2----ssid2----token2"}
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                />
+                <Button className="w-full" onClick={handleImport} disabled={importing || !importText.trim()}>
+                  {importing ? "Importing..." : `Import${importLineCount > 0 ? ` (${importLineCount} accounts)` : ""}`}
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
 
       {/* Account List */}
       <Card>
@@ -221,7 +251,7 @@ export default function Accounts() {
               <line x1="22" x2="16" y1="11" y2="11" />
             </svg>
             <p className="text-sm font-medium">No accounts connected</p>
-            <p className="text-xs mt-1">Connect Gmail or Outlook above to get started</p>
+            <p className="text-xs mt-1">Click "Add Account" to get started</p>
           </CardContent>
         ) : (
           <div className="divide-y">
