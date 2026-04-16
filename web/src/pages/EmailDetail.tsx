@@ -116,11 +116,9 @@ export default function EmailDetail() {
                 <TabsTrigger value="text">{t("email.text")}</TabsTrigger>
               </TabsList>
               <TabsContent value="html" className="mt-4">
-                <iframe
-                  srcDoc={email.html_body}
-                  className="w-full min-h-[400px] rounded-md border"
-                  sandbox=""
-                  title="Email HTML content"
+                <div
+                  className="rounded-md border p-4 prose prose-sm max-w-none break-words"
+                  dangerouslySetInnerHTML={{ __html: email.html_body }}
                 />
               </TabsContent>
               <TabsContent value="text" className="mt-4">
