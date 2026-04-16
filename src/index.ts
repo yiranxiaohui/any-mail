@@ -39,10 +39,34 @@ app.route("/api/emails", emailsRoute);
 app.route("/api/accounts", accountsRoute);
 app.route("/api/settings", settingsRoute);
 
-// 手动触发同步
+// 手动触发同步（全部）
 app.post("/api/sync", async (c) => {
   const result = await syncAllAccounts(c.env);
   return c.json(result);
+});
+
+// 同步单个账号
+app.post("/api/accounts/:id/sync", async (c) => {
+  const id = c.req.param("id");
+  const account = await c.env.DB.prepare("SELECT * FROM accounts WHERE id = ?")
+    .bind(id)
+    .first<Account>();
+
+  if (!account) return c.json({ error: "not found" }, 404);
+  if (account.provider === "domain") return c.json({ error: "domain accounts receive email passively" }, 400);
+
+  const creds = await getOAuthCredentials(c.env);
+  try {
+    let synced = 0;
+    if (account.provider === "gmail") {
+      synced = await syncGmailEmails(account, creds, c.env.DB);
+    } else if (account.provider === "outlook") {
+      synced = await syncOutlookEmails(account, creds, c.env.DB);
+    }
+    return c.json({ ok: true, email: account.email, provider: account.provider, synced });
+  } catch (err) {
+    return c.json({ ok: false, email: account.email, provider: account.provider, synced: 0, error: err instanceof Error ? err.message : "unknown error" }, 500);
+  }
 });
 
 /** 同步所有 Gmail 和 Outlook 账号 */

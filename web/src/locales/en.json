@@ -81,6 +81,8 @@
     "pageInfo": "{{from}}-{{to}} of {{total}}",
     "prev": "Previous",
     "next": "Next",
+    "viewInbox": "Inbox",
+    "syncResult": "{{email}}: synced {{count}} email(s)",
     "edit": "Edit",
     "editTitle": "Edit Account",
     "editFields": {

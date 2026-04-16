@@ -81,6 +81,8 @@
     "pageInfo": "{{from}}-{{to}} / 共 {{total}} 个",
     "prev": "上一页",
     "next": "下一页",
+    "viewInbox": "收件箱",
+    "syncResult": "{{email}}：同步了 {{count}} 封邮件",
     "edit": "编辑",
     "editTitle": "编辑账户",
     "editFields": {

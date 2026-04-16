@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getAccounts, getAccount, deleteAccount, updateAccount, createDomainAccount, importAccounts, gmailAuthUrl, outlookAuthUrl, type Account } from "@/lib/api";
+import { getAccounts, getAccount, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, gmailAuthUrl, outlookAuthUrl, type Account } from "@/lib/api";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +13,9 @@ import { toast } from "sonner";
 
 export default function Accounts() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -163,6 +166,22 @@ export default function Accounts() {
   };
 
   const importLineCount = importText.trim() ? importText.trim().split("\n").filter((l) => l.trim()).length : 0;
+
+  const handleSync = async (id: string, email: string) => {
+    setSyncingId(id);
+    try {
+      const res = await syncAccount(id);
+      if (res.ok) {
+        toast.success(t("accounts.syncResult", { email, count: res.synced }));
+      } else {
+        toast.error(res.error || t("inbox.syncFailed"));
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("inbox.syncFailed"));
+    } finally {
+      setSyncingId(null);
+    }
+  };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -419,6 +438,23 @@ export default function Accounts() {
                   </div>
                 </div>
                 <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate(`/?account_id=${account.id}`)}
+                  >
+                    {t("accounts.viewInbox")}
+                  </Button>
+                  {account.provider !== "domain" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={syncingId === account.id}
+                      onClick={() => handleSync(account.id, account.email)}
+                    >
+                      {syncingId === account.id ? t("inbox.syncing") : t("inbox.sync")}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"

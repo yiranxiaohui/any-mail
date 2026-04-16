@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { getEmails, getAccounts, triggerSync, type Email, type Account } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -16,9 +16,10 @@ import { toast } from "sonner";
 
 export default function Inbox() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const [emails, setEmails] = useState<Email[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [filterAccount, setFilterAccount] = useState("all");
+  const [filterAccount, setFilterAccount] = useState(searchParams.get("account_id") || "all");
   const [searchTo, setSearchTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);

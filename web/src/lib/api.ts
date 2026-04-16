@@ -142,6 +142,13 @@ export function triggerSync() {
   );
 }
 
+// Sync single account
+export function syncAccount(id: string) {
+  return request<{ ok: boolean; email: string; provider: string; synced: number; error?: string }>(`/api/accounts/${id}/sync`, {
+    method: "POST",
+  });
+}
+
 // Settings
 export interface SettingsValue {
   value: string;
