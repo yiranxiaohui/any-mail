@@ -81,11 +81,13 @@ jobs:
 
       - name: Set Worker secrets
         run: |
-          echo "{\"JWT_SECRET\":\"${JWT_SECRET}\"}" | bunx wrangler secret bulk
+          echo "{\"JWT_SECRET\":\"${JWT_SECRET}\",\"CLOUDFLARE_API_TOKEN\":\"${CF_API_TOKEN}\",\"CLOUDFLARE_ACCOUNT_ID\":\"${CF_ACCOUNT_ID}\"}" | bunx wrangler secret bulk
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Build frontend
         run: cd web && bun run build

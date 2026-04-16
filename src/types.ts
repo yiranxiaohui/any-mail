@@ -6,6 +6,8 @@ export interface Env {
   OUTLOOK_CLIENT_SECRET?: string;
   ADMIN_PASSWORD?: string;      // deprecated: 使用 DB settings 表
   JWT_SECRET: string;           // JWT 签名密钥
+  CLOUDFLARE_API_TOKEN?: string;
+  CLOUDFLARE_ACCOUNT_ID?: string;
 }
 
 export interface Account {

@@ -53,18 +53,19 @@ settings.put("/", async (c) => {
 });
 
 /** SECRET 类型的值只显示前4位 + **** */
-/** 从 Cloudflare API 获取域名列表（带 Email Routing 的域名） */
+/** 从 Cloudflare API 获取域名列表 */
 settings.get("/domains", async (c) => {
+  // 优先从 env 读取（部署时设置），其次从 DB settings 读取
   const rows = await c.env.DB.prepare(
     "SELECT key, value FROM settings WHERE key IN ('CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID')"
   ).all<{ key: string; value: string }>();
 
   const map = new Map(rows.results.map((r) => [r.key, r.value]));
-  const apiToken = map.get("CLOUDFLARE_API_TOKEN");
-  const accountId = map.get("CLOUDFLARE_ACCOUNT_ID");
+  const apiToken = c.env.CLOUDFLARE_API_TOKEN || map.get("CLOUDFLARE_API_TOKEN");
+  const accountId = c.env.CLOUDFLARE_ACCOUNT_ID || map.get("CLOUDFLARE_ACCOUNT_ID");
 
   if (!apiToken || !accountId) {
-    return c.json({ error: "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required. Set them in Settings." }, 400);
+    return c.json({ error: "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required." }, 400);
   }
 
   // 获取所有域名
