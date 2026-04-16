@@ -92,8 +92,9 @@ settings.get("/domains", async (c) => {
     // 主域本身
     domains.push({ id: zone.id, name: zone.name, status: zone.status });
 
-    // 通过 DNS MX 记录提取 Email Routing 子域
+    // 通过多个 API 提取 Email Routing 子域
     try {
+      // 方法1: DNS MX 记录
       const dnsRes = await fetch(
         `https://api.cloudflare.com/client/v4/zones/${zone.id}/dns_records?type=MX&per_page=100`,
         { headers: { Authorization: `Bearer ${apiToken}` } }
@@ -102,17 +103,39 @@ settings.get("/domains", async (c) => {
         success: boolean;
         result?: { name: string; type: string; content: string }[];
       };
+      const subdomains = new Set<string>();
       if (dnsData.success && dnsData.result) {
-        const subdomains = new Set<string>();
         for (const record of dnsData.result) {
-          // 所有非主域的 MX 子域
           if (record.name !== zone.name) {
             subdomains.add(record.name);
           }
         }
-        for (const sub of subdomains) {
-          domains.push({ id: `${zone.id}:${sub}`, name: sub, status: "active" });
+      }
+
+      // 方法2: Email Routing rules（catch-all 和自定义规则中的域名）
+      const rulesRes = await fetch(
+        `https://api.cloudflare.com/client/v4/zones/${zone.id}/email/routing/rules?per_page=50`,
+        { headers: { Authorization: `Bearer ${apiToken}` } }
+      );
+      const rulesData = await rulesRes.json() as {
+        success: boolean;
+        result?: { matchers?: { type: string; field?: string; value?: string }[] }[];
+      };
+      if (rulesData.success && rulesData.result) {
+        for (const rule of rulesData.result) {
+          for (const matcher of rule.matchers ?? []) {
+            if (matcher.value && matcher.value.includes("@")) {
+              const domain = matcher.value.split("@")[1];
+              if (domain && domain !== zone.name) {
+                subdomains.add(domain);
+              }
+            }
+          }
         }
+      }
+
+      for (const sub of subdomains) {
+        domains.push({ id: `${zone.id}:${sub}`, name: sub, status: "active" });
       }
     } catch {
       // 子域获取失败不影响主域
