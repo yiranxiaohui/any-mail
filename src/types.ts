@@ -5,7 +5,7 @@ export interface Env {
   OUTLOOK_CLIENT_ID?: string;
   OUTLOOK_CLIENT_SECRET?: string;
   OAUTH_REDIRECT_BASE?: string;
-  ADMIN_PASSWORD: string;       // 管理员密码
+  ADMIN_PASSWORD?: string;      // deprecated: 使用 DB settings 表
   JWT_SECRET: string;           // JWT 签名密钥
 }
 

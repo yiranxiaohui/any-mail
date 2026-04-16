@@ -45,9 +45,17 @@ async function verifyToken(token: string, secret: string): Promise<Record<string
   return payload;
 }
 
+/** 从 DB 读取管理员密码，未设置则默认 "admin" */
+async function getAdminPassword(db: D1Database): Promise<string> {
+  const row = await db.prepare("SELECT value FROM settings WHERE key = 'ADMIN_PASSWORD'")
+    .first<{ value: string }>();
+  return row?.value ?? "admin";
+}
+
 /** 登录：验证密码，返回 token */
-export async function login(password: string, env: { ADMIN_PASSWORD: string; JWT_SECRET: string }) {
-  if (password !== env.ADMIN_PASSWORD) {
+export async function login(password: string, env: { DB: D1Database; JWT_SECRET: string }) {
+  const adminPassword = await getAdminPassword(env.DB);
+  if (password !== adminPassword) {
     return null;
   }
   const token = await signToken(

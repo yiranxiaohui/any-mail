@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../types";
 
 const ALLOWED_KEYS = [
+  "ADMIN_PASSWORD",
   "GMAIL_CLIENT_ID",
   "GMAIL_CLIENT_SECRET",
   "OUTLOOK_CLIENT_ID",
@@ -51,7 +52,7 @@ settings.put("/", async (c) => {
 
 /** SECRET 类型的值只显示前4位 + **** */
 function maskValue(key: string, value: string): string {
-  if (key.includes("SECRET") && value.length > 4) {
+  if ((key.includes("SECRET") || key === "ADMIN_PASSWORD") && value.length > 4) {
     return value.slice(0, 4) + "****";
   }
   return value;
