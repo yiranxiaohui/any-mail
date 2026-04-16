@@ -50,7 +50,7 @@ accounts.get("/", async (c) => {
 accounts.get("/:id", async (c) => {
   const id = c.req.param("id");
   const account = await c.env.DB.prepare(
-    "SELECT id, provider, email, expires_at, created_at, updated_at FROM accounts WHERE id = ?"
+    "SELECT id, provider, email, client_id, refresh_token, expires_at, created_at, updated_at FROM accounts WHERE id = ?"
   )
     .bind(id)
     .first();

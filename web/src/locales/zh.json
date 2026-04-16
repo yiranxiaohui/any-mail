@@ -83,6 +83,12 @@
     "next": "下一页",
     "edit": "编辑",
     "editTitle": "编辑账户",
+    "editFields": {
+      "email": "邮箱地址",
+      "clientId": "客户端 ID",
+      "refreshToken": "令牌",
+      "expiresAt": "有效期"
+    },
     "editExpiresHint": "留空表示永久有效",
     "remove": "移除",
     "removeConfirm": "确定删除账户 {{email}} 及其所有邮件？",

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getAccounts, deleteAccount, updateAccount, createDomainAccount, importAccounts, gmailAuthUrl, outlookAuthUrl, type Account } from "@/lib/api";
+import { getAccounts, getAccount, deleteAccount, updateAccount, createDomainAccount, importAccounts, gmailAuthUrl, outlookAuthUrl, type Account } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,8 +34,11 @@ export default function Accounts() {
   // Edit
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [editEmail, setEditEmail] = useState("");
+  const [editClientId, setEditClientId] = useState("");
+  const [editRefreshToken, setEditRefreshToken] = useState("");
   const [editExpiry, setEditExpiry] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
 
   const fetchAccounts = async (s = debouncedSearch, prov = filterProvider, p = page, ps = pageSize) => {
     setLoading(true);
@@ -119,10 +122,20 @@ export default function Accounts() {
     toast.success(t("accounts.removed", { email }));
   };
 
-  const openEdit = (account: Account) => {
+  const openEdit = async (account: Account) => {
     setEditAccount(account);
     setEditEmail(account.email);
     setEditExpiry(account.expires_at ?? "");
+    setEditClientId("");
+    setEditRefreshToken("");
+    setEditLoading(true);
+    try {
+      const detail = await getAccount(account.id);
+      setEditClientId(detail.client_id ?? "");
+      setEditRefreshToken(detail.refresh_token ?? "");
+    } finally {
+      setEditLoading(false);
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -132,6 +145,8 @@ export default function Accounts() {
       await updateAccount(editAccount.id, {
         email: editEmail.trim().toLowerCase(),
         expires_at: editExpiry || null,
+        client_id: editClientId || null,
+        refresh_token: editRefreshToken || null,
       });
       toast.success(t("settings.saved"));
       setEditAccount(null);
@@ -267,28 +282,57 @@ export default function Accounts() {
             <DialogTitle>{t("accounts.editTitle")}</DialogTitle>
             <DialogDescription>{editAccount?.email}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">{t("compose.from")}</label>
-              <Input
-                type="email"
-                value={editEmail}
-                onChange={(e) => setEditEmail(e.target.value)}
-              />
+          {editLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <svg className="mr-2 h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+              {t("inbox.loading")}
             </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">{t("accounts.domain.expires")}</label>
-              <Input
-                type="datetime-local"
-                value={editExpiry ? editExpiry.slice(0, 16) : ""}
-                onChange={(e) => setEditExpiry(e.target.value ? new Date(e.target.value).toISOString() : "")}
-              />
-              <p className="text-xs text-muted-foreground">{t("accounts.editExpiresHint")}</p>
+          ) : (
+            <div className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">{t("accounts.editFields.email")}</label>
+                <Input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                />
+              </div>
+              {editAccount?.provider === "outlook" && (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">{t("accounts.editFields.clientId")}</label>
+                    <Input
+                      value={editClientId}
+                      onChange={(e) => setEditClientId(e.target.value)}
+                      placeholder="Client ID (SSID)"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">{t("accounts.editFields.refreshToken")}</label>
+                    <Input
+                      value={editRefreshToken}
+                      onChange={(e) => setEditRefreshToken(e.target.value)}
+                      placeholder="Refresh Token"
+                    />
+                  </div>
+                </>
+              )}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">{t("accounts.editFields.expiresAt")}</label>
+                <Input
+                  type="datetime-local"
+                  value={editExpiry ? editExpiry.slice(0, 16) : ""}
+                  onChange={(e) => setEditExpiry(e.target.value ? new Date(e.target.value).toISOString() : "")}
+                />
+                <p className="text-xs text-muted-foreground">{t("accounts.editExpiresHint")}</p>
+              </div>
+              <Button className="w-full" onClick={handleSaveEdit} disabled={saving}>
+                {saving ? t("settings.saving") : t("settings.save")}
+              </Button>
             </div>
-            <Button className="w-full" onClick={handleSaveEdit} disabled={saving}>
-              {saving ? t("settings.saving") : t("settings.save")}
-            </Button>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
 

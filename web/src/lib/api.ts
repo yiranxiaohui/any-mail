@@ -102,6 +102,10 @@ export function getAccounts(params?: { search?: string; provider?: string; limit
   );
 }
 
+export function getAccount(id: string) {
+  return request<Account & { client_id?: string | null; refresh_token?: string | null }>(`/api/accounts/${id}`);
+}
+
 export function createDomainAccount(email: string, expiresAt?: string | null) {
   return request<{ ok: boolean; account: Account }>("/api/accounts", {
     method: "POST",
@@ -118,7 +122,7 @@ export function importAccounts(text: string) {
   });
 }
 
-export function updateAccount(id: string, data: { email?: string; expires_at?: string | null }) {
+export function updateAccount(id: string, data: { email?: string; expires_at?: string | null; client_id?: string | null; refresh_token?: string | null }) {
   return request<{ ok: boolean }>(`/api/accounts/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },

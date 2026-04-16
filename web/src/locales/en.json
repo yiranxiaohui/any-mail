@@ -83,6 +83,12 @@
     "next": "Next",
     "edit": "Edit",
     "editTitle": "Edit Account",
+    "editFields": {
+      "email": "Email",
+      "clientId": "Client ID",
+      "refreshToken": "Refresh Token",
+      "expiresAt": "Expires At"
+    },
     "editExpiresHint": "Leave empty for permanent",
     "remove": "Remove",
     "removeConfirm": "Delete account {{email}} and all its emails?",
