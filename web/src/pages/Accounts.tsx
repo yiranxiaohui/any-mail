@@ -23,6 +23,9 @@ export default function Accounts() {
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
 
+  // Search
+  const [search, setSearch] = useState("");
+
   // Edit
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [editEmail, setEditEmail] = useState("");
@@ -126,6 +129,10 @@ export default function Accounts() {
   };
 
   const importLineCount = importText.trim() ? importText.trim().split("\n").filter((l) => l.trim()).length : 0;
+
+  const filteredAccounts = search
+    ? accounts.filter((a) => a.email.toLowerCase().includes(search.toLowerCase()))
+    : accounts;
 
   return (
     <div className="space-y-6">
@@ -273,8 +280,18 @@ export default function Accounts() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{t("accounts.connectedAccounts")}</CardTitle>
-          <CardDescription>{t("accounts.accountCount", { count: accounts.length })}</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">{t("accounts.connectedAccounts")}</CardTitle>
+              <CardDescription>{t("accounts.accountCount", { count: accounts.length })}</CardDescription>
+            </div>
+            <Input
+              placeholder={t("accounts.searchPlaceholder")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-64"
+            />
+          </div>
         </CardHeader>
         <Separator />
         {loading ? (
@@ -284,7 +301,7 @@ export default function Accounts() {
             </svg>
             {t("inbox.loading")}
           </CardContent>
-        ) : accounts.length === 0 ? (
+        ) : filteredAccounts.length === 0 ? (
           <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <svg className="mb-3 h-10 w-10 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -297,7 +314,7 @@ export default function Accounts() {
           </CardContent>
         ) : (
           <div className="divide-y">
-            {accounts.map((account) => (
+            {filteredAccounts.map((account) => (
               <div key={account.id} className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">

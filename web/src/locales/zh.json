@@ -74,6 +74,7 @@
     "connected": "连接于 {{date}}",
     "expired": "已过期",
     "expires": "{{date}} 过期",
+    "searchPlaceholder": "搜索账户...",
     "edit": "编辑",
     "editTitle": "编辑账户",
     "editExpiresHint": "留空表示永久有效",
