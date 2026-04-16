@@ -67,7 +67,7 @@ export function getEmails(params?: { account_id?: string; to?: string; limit?: n
   if (params?.limit) q.set("limit", String(params.limit));
   if (params?.offset) q.set("offset", String(params.offset));
   const qs = q.toString();
-  return request<{ emails: Email[]; meta: { limit: number; offset: number } }>(
+  return request<{ emails: Email[]; meta: { limit: number; offset: number; total: number } }>(
     `/api/emails${qs ? `?${qs}` : ""}`
   );
 }

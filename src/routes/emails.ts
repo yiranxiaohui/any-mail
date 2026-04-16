@@ -11,25 +11,35 @@ emails.get("/", async (c) => {
   const offset = parseInt(c.req.query("offset") ?? "0");
 
   let sql = "SELECT * FROM emails WHERE 1=1";
+  let countSql = "SELECT COUNT(*) as total FROM emails WHERE 1=1";
   const params: string[] = [];
+  const countParams: string[] = [];
 
   if (accountId) {
     sql += " AND account_id = ?";
+    countSql += " AND account_id = ?";
     params.push(accountId);
+    countParams.push(accountId);
   }
   if (to) {
     sql += " AND to_address LIKE ?";
+    countSql += " AND to_address LIKE ?";
     params.push(`%${to}%`);
+    countParams.push(`%${to}%`);
   }
 
   sql += " ORDER BY received_at DESC LIMIT ? OFFSET ?";
   params.push(String(limit), String(offset));
 
-  const result = await c.env.DB.prepare(sql)
-    .bind(...params)
-    .all();
+  const batchResults = await c.env.DB.batch([
+    c.env.DB.prepare(sql).bind(...params),
+    c.env.DB.prepare(countSql).bind(...countParams),
+  ]);
 
-  return c.json({ emails: result.results, meta: { limit, offset } });
+  const rows = batchResults[0]?.results ?? [];
+  const total = (batchResults[1]?.results[0] as { total: number })?.total ?? 0;
+
+  return c.json({ emails: rows, meta: { limit, offset, total } });
 });
 
 /** 查询单封邮件 */

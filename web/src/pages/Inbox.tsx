@@ -5,6 +5,7 @@ import { getEmails, getAccounts, triggerSync, type Email, type Account } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -24,14 +25,20 @@ export default function Inbox() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
 
-  const fetchEmails = async () => {
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
+
+  const fetchEmails = async (p = page, ps = pageSize) => {
     setLoading(true);
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, string | number> = { limit: ps, offset: (p - 1) * ps };
       if (filterAccount !== "all") params.account_id = filterAccount;
       if (searchTo) params.to = searchTo;
-      const data = await getEmails(params);
+      const data = await getEmails(params as Record<string, string>);
       setEmails(data.emails);
+      setTotal(data.meta.total);
     } finally {
       setLoading(false);
     }
@@ -42,16 +49,16 @@ export default function Inbox() {
   }, []);
 
   useEffect(() => {
-    fetchEmails();
-  }, [filterAccount]);
+    fetchEmails(page, pageSize);
+  }, [filterAccount, page, pageSize]);
 
   const handleSync = async () => {
     setSyncing(true);
     try {
       const res = await triggerSync();
-      const total = res.results.reduce((s, r) => s + r.synced, 0);
-      toast.success(t("inbox.syncResult", { count: total }));
-      await fetchEmails();
+      const syncTotal = res.results.reduce((s, r) => s + r.synced, 0);
+      toast.success(t("inbox.syncResult", { count: syncTotal }));
+      await fetchEmails(page, pageSize);
     } catch {
       toast.error(t("inbox.syncFailed"));
     } finally {
@@ -61,16 +68,21 @@ export default function Inbox() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchEmails();
+    setPage(1);
+    fetchEmails(1, pageSize);
   };
 
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const currentPage = Math.min(page, totalPages);
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-[calc(100vh-48px)] gap-6">
+      {/* Header */}
+      <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t("inbox.title")}</h1>
           <p className="text-sm text-muted-foreground">
-            {t("inbox.emailCount", { count: emails.length })}
+            {t("inbox.emailCount", { count: total })}
           </p>
         </div>
         <Button onClick={handleSync} disabled={syncing} size="sm">
@@ -87,8 +99,9 @@ export default function Inbox() {
         </Button>
       </div>
 
-      <div className="flex gap-3">
-        <Select value={filterAccount} onValueChange={(v) => setFilterAccount(v ?? "all")}>
+      {/* Filters */}
+      <div className="flex gap-3 shrink-0">
+        <Select value={filterAccount} onValueChange={(v) => { setFilterAccount(v ?? "all"); setPage(1); }}>
           <SelectTrigger className="w-[260px]">
             <span className="truncate">
               {filterAccount === "all"
@@ -119,6 +132,7 @@ export default function Inbox() {
         </form>
       </div>
 
+      {/* Email List */}
       {loading ? (
         <div className="flex items-center justify-center py-20 text-muted-foreground">
           <svg className="mr-2 h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -138,8 +152,8 @@ export default function Inbox() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="overflow-hidden">
-          <div className="divide-y">
+        <Card className="flex flex-col min-h-0 flex-1">
+          <div className="divide-y overflow-y-auto flex-1 min-h-0">
             {emails.map((email) => (
               <Link
                 to={`/emails/${email.id}`}
@@ -166,6 +180,33 @@ export default function Inbox() {
                 </p>
               </Link>
             ))}
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between px-5 py-3 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{t("accounts.perPage")}</span>
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-xs text-muted-foreground">
+                {t("accounts.pageInfo", { from: (currentPage - 1) * pageSize + 1, to: Math.min(currentPage * pageSize, total), total })}
+              </span>
+            </div>
+            <div className="flex gap-1">
+              <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
+                {t("accounts.prev")}
+              </Button>
+              <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
+                {t("accounts.next")}
+              </Button>
+            </div>
           </div>
         </Card>
       )}
