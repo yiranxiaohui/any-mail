@@ -117,9 +117,8 @@ export default function EmailDetail() {
               </TabsList>
               <TabsContent value="html" className="mt-4">
                 <div
-                  className="rounded-md border p-4 prose prose-sm max-w-none break-words [&_*]:!max-height-none [&_*]:!overflow-visible [&_*]:!height-auto"
-                  style={{ overflow: "visible" }}
-                  dangerouslySetInnerHTML={{ __html: email.html_body.replace(/overflow\s*:\s*[^;]+;?/gi, "").replace(/max-height\s*:\s*[^;]+;?/gi, "").replace(/height\s*:\s*\d+[^;]*;?/gi, "") }}
+                  className="rounded-md border p-4 prose prose-sm max-w-none break-words"
+                  dangerouslySetInnerHTML={{ __html: email.html_body.replace(/overflow\s*:\s*(hidden|scroll|auto)\s*;?/gi, "") }}
                 />
               </TabsContent>
               <TabsContent value="text" className="mt-4">
