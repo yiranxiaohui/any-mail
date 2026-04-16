@@ -60,6 +60,7 @@ accounts.post("/import", async (c) => {
 
   const lines = body.text.trim().split("\n").filter((l) => l.trim());
   const results: { email: string; status: string }[] = [];
+  const stmts: D1PreparedStatement[] = [];
 
   for (const line of lines) {
     const parts = line.split("----").map((s) => s.trim());
@@ -76,17 +77,21 @@ accounts.post("/import", async (c) => {
     }
 
     const id = crypto.randomUUID();
-
-    try {
-      await c.env.DB.prepare(
+    stmts.push(
+      c.env.DB.prepare(
         `INSERT INTO accounts (id, provider, email, refresh_token)
          VALUES (?, 'outlook', ?, ?)
          ON CONFLICT(email) DO UPDATE SET refresh_token=?, updated_at=datetime('now')`
-      ).bind(id, email.toLowerCase(), refreshToken, refreshToken).run();
+      ).bind(id, email.toLowerCase(), refreshToken, refreshToken)
+    );
+    results.push({ email, status: "ok" });
+  }
 
-      results.push({ email, status: "ok" });
+  if (stmts.length > 0) {
+    try {
+      await c.env.DB.batch(stmts);
     } catch (err) {
-      results.push({ email, status: err instanceof Error ? err.message : "error" });
+      return c.json({ error: err instanceof Error ? err.message : "batch insert failed" }, 500);
     }
   }
 
