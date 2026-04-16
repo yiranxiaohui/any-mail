@@ -61,6 +61,18 @@ export default function EmailDetail() {
           </svg>
           Back
         </Button>
+        <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate(`/compose?to=${encodeURIComponent(email.from_address)}&from=${encodeURIComponent(email.to_address)}&subject=${encodeURIComponent(`Re: ${email.subject}`)}`)}
+        >
+          <svg className="mr-1.5 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 17 4 12 9 7" />
+            <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+          </svg>
+          Reply
+        </Button>
         <Button variant="destructive" size="sm" onClick={handleDelete}>
           <svg className="mr-1.5 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 6h18" />
@@ -69,6 +81,7 @@ export default function EmailDetail() {
           </svg>
           Delete
         </Button>
+        </div>
       </div>
 
       {/* Email Card */}

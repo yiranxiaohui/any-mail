@@ -43,6 +43,59 @@ emails.get("/:id", async (c) => {
   return c.json(email);
 });
 
+/** 发送邮件（通过 Resend） */
+emails.post("/send", async (c) => {
+  const body = await c.req.json<{
+    from: string;
+    to: string;
+    subject: string;
+    text?: string;
+    html?: string;
+  }>();
+
+  if (!body.from || !body.to || !body.subject) {
+    return c.json({ error: "from, to, subject are required" }, 400);
+  }
+
+  // 从 settings 读取 Resend API Key
+  const row = await c.env.DB.prepare("SELECT value FROM settings WHERE key = 'RESEND_API_KEY'")
+    .first<{ value: string }>();
+  if (!row?.value) {
+    return c.json({ error: "Resend API key not configured. Set it in Settings." }, 400);
+  }
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${row.value}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: body.from,
+      to: [body.to],
+      subject: body.subject,
+      text: body.text || undefined,
+      html: body.html || undefined,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    return c.json({ error: `Resend error: ${err}` }, 500);
+  }
+
+  const result = await res.json<{ id: string }>();
+
+  // 保存到已发送记录
+  const id = crypto.randomUUID();
+  await c.env.DB.prepare(
+    `INSERT INTO emails (id, account_id, message_id, provider, from_address, to_address, subject, text_body, html_body, raw_headers, received_at)
+     VALUES (?, '', ?, 'resend', ?, ?, ?, ?, ?, '{}', datetime('now'))`
+  ).bind(id, result.id, body.from, body.to, body.subject, body.text || "", body.html || "").run();
+
+  return c.json({ ok: true, id: result.id });
+});
+
 /** 删除邮件 */
 emails.delete("/:id", async (c) => {
   const id = c.req.param("id");

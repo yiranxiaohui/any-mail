@@ -25,6 +25,7 @@ const OUTLOOK_FIELDS: FieldConfig[] = [
 
 const GENERAL_FIELDS: FieldConfig[] = [
   { key: "ADMIN_PASSWORD", label: "Admin Password", placeholder: "Default: admin", sensitive: true },
+  { key: "RESEND_API_KEY", label: "Resend API Key", placeholder: "re_xxxx", sensitive: true },
 ];
 
 export default function Settings() {

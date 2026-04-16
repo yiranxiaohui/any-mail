@@ -80,6 +80,15 @@ export function deleteEmail(id: string) {
   return request<{ ok: boolean }>(`/api/emails/${id}`, { method: "DELETE" });
 }
 
+// Send email
+export function sendEmail(data: { from: string; to: string; subject: string; text?: string; html?: string }) {
+  return request<{ ok: boolean; id: string }>("/api/emails/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
 // Accounts
 export function getAccounts() {
   return request<{ accounts: Account[] }>("/api/accounts");

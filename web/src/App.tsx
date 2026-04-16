@@ -6,6 +6,7 @@ import Inbox from "@/pages/Inbox";
 import EmailDetail from "@/pages/EmailDetail";
 import Accounts from "@/pages/Accounts";
 import Settings from "@/pages/Settings";
+import Compose from "@/pages/Compose";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -28,6 +29,7 @@ export default function App() {
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route path="/" element={<Inbox />} />
             <Route path="/emails/:id" element={<EmailDetail />} />
+            <Route path="/compose" element={<Compose />} />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
