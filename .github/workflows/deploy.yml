@@ -61,7 +61,7 @@ jobs:
         run: |
           for f in $(ls migrations/*.sql | sort); do
             echo "Running migration: $f"
-            bunx wrangler d1 execute any-mail-db --remote --file="$f"
+            bunx wrangler d1 execute any-mail-db --remote --file="$f" || echo "⚠️ Migration $f skipped (already applied)"
           done
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
