@@ -28,8 +28,6 @@ const GENERAL_FIELDS: FieldConfig[] = [
   { key: "ADMIN_PASSWORD", labelKey: "settings.fields.adminPassword", placeholderKey: "settings.fields.adminPasswordPlaceholder", sensitive: true },
   { key: "RESEND_API_KEY", labelKey: "settings.fields.resendApiKey", placeholderKey: "settings.fields.resendApiKeyPlaceholder", sensitive: true },
   { key: "EMAIL_DOMAINS", labelKey: "settings.fields.emailDomains", placeholderKey: "settings.fields.emailDomainsPlaceholder", sensitive: false },
-  { key: "CLOUDFLARE_API_TOKEN", labelKey: "settings.fields.cfApiToken", placeholderKey: "settings.fields.cfApiTokenPlaceholder", sensitive: true },
-  { key: "CLOUDFLARE_ACCOUNT_ID", labelKey: "settings.fields.cfAccountId", placeholderKey: "settings.fields.cfAccountIdPlaceholder", sensitive: false },
 ];
 
 export default function Settings() {
