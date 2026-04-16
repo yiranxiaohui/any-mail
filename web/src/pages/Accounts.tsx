@@ -148,8 +148,8 @@ export default function Accounts() {
   const currentPage = Math.min(page, totalPages);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-[calc(100vh-48px)] gap-6">
+      <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t("accounts.title")}</h1>
           <p className="text-sm text-muted-foreground">{t("accounts.description")}</p>
@@ -291,8 +291,8 @@ export default function Accounts() {
         </DialogContent>
       </Dialog>
 
-      <Card>
-        <CardHeader>
+      <Card className="flex flex-col min-h-0 flex-1">
+        <CardHeader className="shrink-0">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-base">{t("accounts.connectedAccounts")}</CardTitle>
@@ -326,7 +326,7 @@ export default function Accounts() {
             <p className="text-xs mt-1">{t("accounts.noAccountsHint")}</p>
           </CardContent>
         ) : (
-          <div className="divide-y">
+          <div className="divide-y overflow-y-auto flex-1 min-h-0">
             {accounts.map((account) => (
               <div key={account.id} className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center gap-3">
