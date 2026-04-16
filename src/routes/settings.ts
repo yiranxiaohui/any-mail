@@ -83,11 +83,41 @@ settings.get("/domains", async (c) => {
     return c.json({ error: data.errors?.[0]?.message || "Failed to fetch domains" }, 500);
   }
 
-  const domains = (data.result ?? []).map((z) => ({
-    id: z.id,
-    name: z.name,
-    status: z.status,
-  }));
+  const zones = data.result ?? [];
+
+  // 获取每个域名的 Email Routing 子域
+  const domains: { id: string; name: string; status: string }[] = [];
+
+  for (const zone of zones) {
+    // 主域本身
+    domains.push({ id: zone.id, name: zone.name, status: zone.status });
+
+    // 获取 Email Routing 子域
+    try {
+      const subRes = await fetch(
+        `https://api.cloudflare.com/client/v4/zones/${zone.id}/email/routing/dns`,
+        { headers: { Authorization: `Bearer ${apiToken}` } }
+      );
+      const subData = await subRes.json() as {
+        success: boolean;
+        result?: { name?: string; type?: string; content?: string }[];
+      };
+      if (subData.success && subData.result) {
+        // 从 MX 记录中提取子域名
+        const subdomains = new Set<string>();
+        for (const record of subData.result) {
+          if (record.type === "MX" && record.name && record.name !== zone.name) {
+            subdomains.add(record.name);
+          }
+        }
+        for (const sub of subdomains) {
+          domains.push({ id: `${zone.id}:${sub}`, name: sub, status: "active" });
+        }
+      }
+    } catch {
+      // 子域获取失败不影响主域
+    }
+  }
 
   return c.json({ domains });
 });
