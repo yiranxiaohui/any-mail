@@ -19,10 +19,6 @@ const GMAIL_FIELDS: FieldConfig[] = [
   { key: "GMAIL_CLIENT_SECRET", labelKey: "settings.fields.gmailClientSecret", placeholderKey: "settings.fields.gmailClientSecretPlaceholder", sensitive: true },
 ];
 
-const OUTLOOK_FIELDS: FieldConfig[] = [
-  { key: "OUTLOOK_CLIENT_ID", labelKey: "settings.fields.outlookClientId", placeholderKey: "settings.fields.outlookClientIdPlaceholder", sensitive: false },
-  { key: "OUTLOOK_CLIENT_SECRET", labelKey: "settings.fields.outlookClientSecret", placeholderKey: "settings.fields.outlookClientSecretPlaceholder", sensitive: true },
-];
 
 const GENERAL_FIELDS: FieldConfig[] = [
   { key: "ADMIN_PASSWORD", labelKey: "settings.fields.adminPassword", placeholderKey: "settings.fields.adminPasswordPlaceholder", sensitive: true },
@@ -229,20 +225,6 @@ export default function Settings() {
           </svg>
         }
         fields={GMAIL_FIELDS}
-        values={values}
-        existing={existing}
-        onChange={handleChange}
-      />
-
-      <SettingsSection
-        title={t("settings.outlook")}
-        description={t("settings.outlookDescription")}
-        icon={
-          <svg className="h-5 w-5 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M7 18c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6zm0-9.5c-1.9 0-3.5 1.6-3.5 3.5S5.1 15.5 7 15.5s3.5-1.6 3.5-3.5S8.9 8.5 7 8.5z" />
-          </svg>
-        }
-        fields={OUTLOOK_FIELDS}
         values={values}
         existing={existing}
         onChange={handleChange}
