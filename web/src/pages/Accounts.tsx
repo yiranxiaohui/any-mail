@@ -38,6 +38,10 @@ export default function Accounts() {
 
   const handleCreateDomain = async () => {
     if (!newEmail.trim()) return;
+    if (!newEmail.includes("@")) {
+      toast.error("Please enter a full email address, e.g. user@yourdomain.com");
+      return;
+    }
     setCreating(true);
     try {
       const expiresAt = getExpiresAt();
@@ -81,7 +85,7 @@ export default function Accounts() {
           <div className="flex gap-3">
             <Input
               type="email"
-              placeholder="hello@yourdomain.com"
+              placeholder="user@yourdomain.com"
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreateDomain()}
