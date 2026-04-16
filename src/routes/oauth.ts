@@ -10,7 +10,8 @@ const oauth = new Hono<{ Bindings: Env }>();
 
 oauth.get("/gmail", async (c) => {
   const creds = await getOAuthCredentials(c.env);
-  return c.redirect(getGmailAuthUrl(creds));
+  const origin = new URL(c.req.url).origin;
+  return c.redirect(getGmailAuthUrl(creds, origin));
 });
 
 oauth.get("/gmail/callback", async (c) => {
@@ -18,7 +19,8 @@ oauth.get("/gmail/callback", async (c) => {
   if (!code) return c.json({ error: "missing code" }, 400);
 
   const creds = await getOAuthCredentials(c.env);
-  const account = await handleGmailCallback(code, creds, c.env.DB);
+  const origin = new URL(c.req.url).origin;
+  const account = await handleGmailCallback(code, creds, origin, c.env.DB);
   return c.json({ ok: true, account: { id: account.id, email: account.email, provider: "gmail" } });
 });
 
@@ -26,7 +28,8 @@ oauth.get("/gmail/callback", async (c) => {
 
 oauth.get("/outlook", async (c) => {
   const creds = await getOAuthCredentials(c.env);
-  return c.redirect(getOutlookAuthUrl(creds));
+  const origin = new URL(c.req.url).origin;
+  return c.redirect(getOutlookAuthUrl(creds, origin));
 });
 
 oauth.get("/outlook/callback", async (c) => {
@@ -34,7 +37,8 @@ oauth.get("/outlook/callback", async (c) => {
   if (!code) return c.json({ error: "missing code" }, 400);
 
   const creds = await getOAuthCredentials(c.env);
-  const account = await handleOutlookCallback(code, creds, c.env.DB);
+  const origin = new URL(c.req.url).origin;
+  const account = await handleOutlookCallback(code, creds, origin, c.env.DB);
   return c.json({ ok: true, account: { id: account.id, email: account.email, provider: "outlook" } });
 });
 

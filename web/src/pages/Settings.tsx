@@ -25,7 +25,6 @@ const OUTLOOK_FIELDS: FieldConfig[] = [
 
 const GENERAL_FIELDS: FieldConfig[] = [
   { key: "ADMIN_PASSWORD", label: "Admin Password", placeholder: "Default: admin", sensitive: true },
-  { key: "OAUTH_REDIRECT_BASE", label: "OAuth Redirect Base URL", placeholder: "https://any-mail.xxx.workers.dev", sensitive: false },
 ];
 
 export default function Settings() {

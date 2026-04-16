@@ -8,10 +8,10 @@ const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
 const SCOPES = "https://www.googleapis.com/auth/gmail.readonly";
 
 /** 生成 Gmail OAuth 授权链接 */
-export function getGmailAuthUrl(creds: OAuthCredentials): string {
+export function getGmailAuthUrl(creds: OAuthCredentials, origin: string): string {
   const params = new URLSearchParams({
     client_id: creds.gmailClientId,
-    redirect_uri: `${creds.oauthRedirectBase}/api/oauth/gmail/callback`,
+    redirect_uri: `${origin}/api/oauth/gmail/callback`,
     response_type: "code",
     scope: SCOPES,
     access_type: "offline",
@@ -21,7 +21,7 @@ export function getGmailAuthUrl(creds: OAuthCredentials): string {
 }
 
 /** 用 authorization code 换取 token，并创建 account */
-export async function handleGmailCallback(code: string, creds: OAuthCredentials, db: D1Database): Promise<Account> {
+export async function handleGmailCallback(code: string, creds: OAuthCredentials, origin: string, db: D1Database): Promise<Account> {
   const tokenRes = await fetch(GMAIL_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -29,7 +29,7 @@ export async function handleGmailCallback(code: string, creds: OAuthCredentials,
       code,
       client_id: creds.gmailClientId,
       client_secret: creds.gmailClientSecret,
-      redirect_uri: `${creds.oauthRedirectBase}/api/oauth/gmail/callback`,
+      redirect_uri: `${origin}/api/oauth/gmail/callback`,
       grant_type: "authorization_code",
     }),
   });

@@ -8,10 +8,10 @@ const GRAPH_API = "https://graph.microsoft.com/v1.0/me";
 const SCOPES = "openid email Mail.Read offline_access";
 
 /** 生成 Outlook OAuth 授权链接 */
-export function getOutlookAuthUrl(creds: OAuthCredentials): string {
+export function getOutlookAuthUrl(creds: OAuthCredentials, origin: string): string {
   const params = new URLSearchParams({
     client_id: creds.outlookClientId,
-    redirect_uri: `${creds.oauthRedirectBase}/api/oauth/outlook/callback`,
+    redirect_uri: `${origin}/api/oauth/outlook/callback`,
     response_type: "code",
     scope: SCOPES,
     response_mode: "query",
@@ -20,7 +20,7 @@ export function getOutlookAuthUrl(creds: OAuthCredentials): string {
 }
 
 /** 用 authorization code 换取 token */
-export async function handleOutlookCallback(code: string, creds: OAuthCredentials, db: D1Database): Promise<Account> {
+export async function handleOutlookCallback(code: string, creds: OAuthCredentials, origin: string, db: D1Database): Promise<Account> {
   const tokenRes = await fetch(MS_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -28,7 +28,7 @@ export async function handleOutlookCallback(code: string, creds: OAuthCredential
       code,
       client_id: creds.outlookClientId,
       client_secret: creds.outlookClientSecret,
-      redirect_uri: `${creds.oauthRedirectBase}/api/oauth/outlook/callback`,
+      redirect_uri: `${origin}/api/oauth/outlook/callback`,
       grant_type: "authorization_code",
       scope: SCOPES,
     }),

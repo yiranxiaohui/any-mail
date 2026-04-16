@@ -7,7 +7,6 @@ const ALLOWED_KEYS = [
   "GMAIL_CLIENT_SECRET",
   "OUTLOOK_CLIENT_ID",
   "OUTLOOK_CLIENT_SECRET",
-  "OAUTH_REDIRECT_BASE",
 ];
 
 const settings = new Hono<{ Bindings: Env }>();
