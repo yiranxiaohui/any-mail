@@ -74,6 +74,8 @@
     "connected": "连接于 {{date}}",
     "expired": "已过期",
     "expires": "{{date}} 过期",
+    "allTypes": "所有类型",
+    "typeDomain": "域名邮箱",
     "searchPlaceholder": "搜索账户...",
     "perPage": "每页",
     "pageInfo": "{{from}}-{{to}} / 共 {{total}} 个",

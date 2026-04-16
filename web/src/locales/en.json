@@ -74,6 +74,8 @@
     "connected": "Connected {{date}}",
     "expired": "Expired",
     "expires": "Expires {{date}}",
+    "allTypes": "All Types",
+    "typeDomain": "Domain",
     "searchPlaceholder": "Search accounts...",
     "perPage": "Per page",
     "pageInfo": "{{from}}-{{to}} of {{total}}",

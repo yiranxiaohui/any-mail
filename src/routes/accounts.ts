@@ -6,6 +6,7 @@ const accounts = new Hono<{ Bindings: Env }>();
 /** 列出邮箱账号（支持分页和搜索） */
 accounts.get("/", async (c) => {
   const search = c.req.query("search");
+  const provider = c.req.query("provider");
   const limit = Math.min(parseInt(c.req.query("limit") ?? "20"), 100);
   const offset = parseInt(c.req.query("offset") ?? "0");
 
@@ -13,12 +14,22 @@ accounts.get("/", async (c) => {
   let countSql = "SELECT COUNT(*) as total FROM accounts";
   const params: string[] = [];
   const countParams: string[] = [];
+  const conditions: string[] = [];
 
   if (search) {
-    sql += " WHERE email LIKE ?";
-    countSql += " WHERE email LIKE ?";
+    conditions.push("email LIKE ?");
     params.push(`%${search}%`);
     countParams.push(`%${search}%`);
+  }
+  if (provider) {
+    conditions.push("provider = ?");
+    params.push(provider);
+    countParams.push(provider);
+  }
+  if (conditions.length > 0) {
+    const where = " WHERE " + conditions.join(" AND ");
+    sql += where;
+    countSql += where;
   }
 
   sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?";

@@ -90,9 +90,10 @@ export function sendEmail(data: { from: string; to: string; subject: string; tex
 }
 
 // Accounts
-export function getAccounts(params?: { search?: string; limit?: number; offset?: number }) {
+export function getAccounts(params?: { search?: string; provider?: string; limit?: number; offset?: number }) {
   const q = new URLSearchParams();
   if (params?.search) q.set("search", params.search);
+  if (params?.provider) q.set("provider", params.provider);
   if (params?.limit) q.set("limit", String(params.limit));
   if (params?.offset) q.set("offset", String(params.offset));
   const qs = q.toString();

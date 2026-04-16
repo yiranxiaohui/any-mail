@@ -23,9 +23,10 @@ export default function Accounts() {
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
 
-  // Search & Pagination
+  // Search, Filter & Pagination
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [filterProvider, setFilterProvider] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
@@ -36,10 +37,10 @@ export default function Accounts() {
   const [editExpiry, setEditExpiry] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const fetchAccounts = async (s = debouncedSearch, p = page, ps = pageSize) => {
+  const fetchAccounts = async (s = debouncedSearch, prov = filterProvider, p = page, ps = pageSize) => {
     setLoading(true);
     try {
-      const data = await getAccounts({ search: s || undefined, limit: ps, offset: (p - 1) * ps });
+      const data = await getAccounts({ search: s || undefined, provider: prov || undefined, limit: ps, offset: (p - 1) * ps });
       setAccounts(data.accounts);
       setTotal(data.meta.total);
     } finally {
@@ -57,8 +58,8 @@ export default function Accounts() {
   }, [search]);
 
   useEffect(() => {
-    fetchAccounts(debouncedSearch, page, pageSize);
-  }, [debouncedSearch, page, pageSize]);
+    fetchAccounts(debouncedSearch, filterProvider, page, pageSize);
+  }, [debouncedSearch, filterProvider, page, pageSize]);
 
   const getExpiresAt = (): string | null => {
     if (expiry === "permanent") return null;
@@ -298,12 +299,24 @@ export default function Accounts() {
               <CardTitle className="text-base">{t("accounts.connectedAccounts")}</CardTitle>
               <CardDescription>{t("accounts.accountCount", { count: total })}</CardDescription>
             </div>
-            <Input
-              placeholder={t("accounts.searchPlaceholder")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-64"
-            />
+            <div className="flex gap-2">
+              <select
+                value={filterProvider}
+                onChange={(e) => { setFilterProvider(e.target.value); setPage(1); }}
+                className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">{t("accounts.allTypes")}</option>
+                <option value="domain">{t("accounts.typeDomain")}</option>
+                <option value="gmail">Gmail</option>
+                <option value="outlook">Outlook</option>
+              </select>
+              <Input
+                placeholder={t("accounts.searchPlaceholder")}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-64"
+              />
+            </div>
           </div>
         </CardHeader>
         <Separator />
