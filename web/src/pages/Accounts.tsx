@@ -23,8 +23,10 @@ export default function Accounts() {
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
 
-  // Search
+  // Search & Pagination
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
   // Edit
   const [editAccount, setEditAccount] = useState<Account | null>(null);
@@ -133,6 +135,10 @@ export default function Accounts() {
   const filteredAccounts = search
     ? accounts.filter((a) => a.email.toLowerCase().includes(search.toLowerCase()))
     : accounts;
+
+  const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedAccounts = filteredAccounts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <div className="space-y-6">
@@ -288,7 +294,7 @@ export default function Accounts() {
             <Input
               placeholder={t("accounts.searchPlaceholder")}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               className="w-64"
             />
           </div>
@@ -314,7 +320,7 @@ export default function Accounts() {
           </CardContent>
         ) : (
           <div className="divide-y">
-            {filteredAccounts.map((account) => (
+            {pagedAccounts.map((account) => (
               <div key={account.id} className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
@@ -355,6 +361,24 @@ export default function Accounts() {
               </div>
             ))}
           </div>
+        )}
+        {filteredAccounts.length > pageSize && (
+          <>
+            <Separator />
+            <div className="flex items-center justify-between px-6 py-3">
+              <span className="text-xs text-muted-foreground">
+                {t("accounts.pageInfo", { from: (currentPage - 1) * pageSize + 1, to: Math.min(currentPage * pageSize, filteredAccounts.length), total: filteredAccounts.length })}
+              </span>
+              <div className="flex gap-1">
+                <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
+                  {t("accounts.prev")}
+                </Button>
+                <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
+                  {t("accounts.next")}
+                </Button>
+              </div>
+            </div>
+          </>
         )}
       </Card>
     </div>
