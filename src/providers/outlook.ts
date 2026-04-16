@@ -85,14 +85,21 @@ async function refreshOutlookToken(account: Account, creds: OAuthCredentials, db
   }
 
   // 导入账号自带 client_id（公共客户端，无需 client_secret）
-  const useOwnClientId = !!account.client_id;
+  const clientId = account.client_id || creds.outlookClientId;
+  if (!clientId) {
+    throw new Error("No client_id available for this account. Set it in account edit or configure OUTLOOK_CLIENT_ID in Settings.");
+  }
+  if (!account.refresh_token) {
+    throw new Error("No refresh_token available for this account.");
+  }
+
   const params: Record<string, string> = {
-    client_id: useOwnClientId ? account.client_id! : creds.outlookClientId,
-    refresh_token: account.refresh_token!,
+    client_id: clientId,
+    refresh_token: account.refresh_token,
     grant_type: "refresh_token",
     scope: SCOPES,
   };
-  if (!useOwnClientId && creds.outlookClientSecret) {
+  if (!account.client_id && creds.outlookClientSecret) {
     params.client_secret = creds.outlookClientSecret;
   }
 
@@ -102,16 +109,20 @@ async function refreshOutlookToken(account: Account, creds: OAuthCredentials, db
     body: new URLSearchParams(params),
   });
 
-  const token = (await res.json()) as { access_token: string; expires_in: number };
-  const expiresAt = Date.now() + token.expires_in * 1000;
+  const tokenBody = await res.json() as { access_token?: string; expires_in?: number; error?: string; error_description?: string };
+  if (!tokenBody.access_token) {
+    throw new Error(tokenBody.error_description || tokenBody.error || "Failed to refresh token");
+  }
+
+  const expiresAt = Date.now() + (tokenBody.expires_in ?? 3600) * 1000;
 
   await db.prepare(
     "UPDATE accounts SET access_token = ?, token_expires_at = ?, updated_at = datetime('now') WHERE id = ?"
   )
-    .bind(token.access_token, expiresAt, account.id)
+    .bind(tokenBody.access_token, expiresAt, account.id)
     .run();
 
-  return token.access_token;
+  return tokenBody.access_token;
 }
 
 /** 拉取 Outlook 新邮件 */
