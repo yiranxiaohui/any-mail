@@ -21,6 +21,44 @@ jobs:
       - name: Build frontend
         run: cd web && bun run build
 
+      - name: Ensure D1 database exists
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 list --json
+        id: d1_list
+
+      - name: Create or reuse D1 database
+        shell: bash
+        run: |
+          DB_ID=$(echo '${{ steps.d1_list.outputs.command-output }}' | jq -r '.[] | select(.name=="any-mail-db") | .uuid')
+          if [ -z "$DB_ID" ]; then
+            echo "Database not found, creating..."
+            echo "CREATE_DB=true" >> $GITHUB_ENV
+          else
+            echo "Database found: $DB_ID"
+            echo "D1_DATABASE_ID=$DB_ID" >> $GITHUB_ENV
+            sed -i "s/placeholder-replace-after-creation/$DB_ID/" wrangler.toml
+          fi
+
+      - name: Create D1 database
+        if: env.CREATE_DB == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 create any-mail-db --json
+        id: d1_create
+
+      - name: Set D1 database ID from creation
+        if: env.CREATE_DB == 'true'
+        shell: bash
+        run: |
+          DB_ID=$(echo '${{ steps.d1_create.outputs.command-output }}' | jq -r '.uuid')
+          echo "D1_DATABASE_ID=$DB_ID" >> $GITHUB_ENV
+          sed -i "s/placeholder-replace-after-creation/$DB_ID/" wrangler.toml
+
       - name: Run database migrations
         uses: cloudflare/wrangler-action@v3
         with:
