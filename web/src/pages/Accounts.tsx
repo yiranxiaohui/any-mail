@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getAccounts, getAccount, getEmails, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, gmailAuthUrl, outlookAuthUrl, type Account, type Email } from "@/lib/api";
+import { getAccounts, getAccount, getEmails, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, getDomains, gmailAuthUrl, outlookAuthUrl, type Account, type Email } from "@/lib/api";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,8 @@ export default function Accounts() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const [newEmail, setNewEmail] = useState("");
+  const [selectedDomain, setSelectedDomain] = useState("");
+  const [domains, setDomains] = useState<{ id: string; name: string; status: string }[]>([]);
   const [expiry, setExpiry] = useState("permanent");
   const [creating, setCreating] = useState(false);
 
@@ -98,14 +100,19 @@ export default function Accounts() {
 
   const handleCreateDomain = async () => {
     if (!newEmail.trim()) return;
-    if (!newEmail.includes("@")) {
+    // 如果有域名列表，组合 prefix@domain；否则要求完整邮箱
+    let email = newEmail.trim();
+    if (domains.length > 0 && selectedDomain) {
+      email = `${email}@${selectedDomain}`;
+    }
+    if (!email.includes("@")) {
       toast.error(t("accounts.domain.invalidEmail"));
       return;
     }
     setCreating(true);
     try {
       const expiresAt = getExpiresAt();
-      const res = await createDomainAccount(newEmail.trim(), expiresAt);
+      const res = await createDomainAccount(email, expiresAt);
       setAccounts((prev) => [{ ...res.account, expires_at: expiresAt, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, ...prev]);
       setNewEmail("");
       setExpiry("permanent");
@@ -231,7 +238,7 @@ export default function Accounts() {
           <h1 className="text-2xl font-bold tracking-tight">{t("accounts.title")}</h1>
           <p className="text-sm text-muted-foreground">{t("accounts.description")}</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
+        <Button onClick={() => { setDialogOpen(true); getDomains().then((d) => { setDomains(d.domains); if (d.domains.length > 0 && !selectedDomain) setSelectedDomain(d.domains[0].name); }).catch(() => {}); }}>
           <svg className="mr-1.5 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" x2="12" y1="5" y2="19" />
             <line x1="5" x2="19" y1="12" y2="12" />
@@ -257,13 +264,35 @@ export default function Accounts() {
             <TabsContent value="domain">
               <div className="space-y-4 pt-2">
                 <p className="text-sm text-muted-foreground">{t("accounts.domain.description")}</p>
-                <Input
-                  type="email"
-                  placeholder={t("accounts.domain.placeholder")}
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleCreateDomain()}
-                />
+                {domains.length > 0 ? (
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder={t("accounts.domain.localPart")}
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleCreateDomain()}
+                      className="flex-1"
+                    />
+                    <span className="flex items-center text-sm text-muted-foreground">@</span>
+                    <select
+                      value={selectedDomain}
+                      onChange={(e) => setSelectedDomain(e.target.value)}
+                      className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      {domains.map((d) => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <Input
+                    type="email"
+                    placeholder={t("accounts.domain.placeholder")}
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleCreateDomain()}
+                  />
+                )}
                 <div className="flex items-center gap-3">
                   <label className="text-sm font-medium shrink-0">{t("accounts.domain.expires")}</label>
                   <select

@@ -176,6 +176,11 @@ export function updateSettings(data: Record<string, string>) {
 }
 
 // OAuth URLs
+// Domains
+export function getDomains() {
+  return request<{ domains: { id: string; name: string; status: string }[] }>("/api/settings/domains");
+}
+
 export const gmailAuthUrl = `${BASE}/api/oauth/gmail`;
 export const outlookAuthUrl = `${BASE}/api/oauth/outlook`;
 export const outlookReauthUrl = (clientId: string) => `${BASE}/api/oauth/outlook/reauth?client_id=${encodeURIComponent(clientId)}`;

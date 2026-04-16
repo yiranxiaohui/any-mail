@@ -4,6 +4,8 @@ import type { Env } from "../types";
 const ALLOWED_KEYS = [
   "ADMIN_PASSWORD",
   "RESEND_API_KEY",
+  "CLOUDFLARE_API_TOKEN",
+  "CLOUDFLARE_ACCOUNT_ID",
   "GMAIL_CLIENT_ID",
   "GMAIL_CLIENT_SECRET",
   "OUTLOOK_CLIENT_ID",
@@ -51,8 +53,46 @@ settings.put("/", async (c) => {
 });
 
 /** SECRET 类型的值只显示前4位 + **** */
+/** 从 Cloudflare API 获取域名列表（带 Email Routing 的域名） */
+settings.get("/domains", async (c) => {
+  const rows = await c.env.DB.prepare(
+    "SELECT key, value FROM settings WHERE key IN ('CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID')"
+  ).all<{ key: string; value: string }>();
+
+  const map = new Map(rows.results.map((r) => [r.key, r.value]));
+  const apiToken = map.get("CLOUDFLARE_API_TOKEN");
+  const accountId = map.get("CLOUDFLARE_ACCOUNT_ID");
+
+  if (!apiToken || !accountId) {
+    return c.json({ error: "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required. Set them in Settings." }, 400);
+  }
+
+  // 获取所有域名
+  const res = await fetch(`https://api.cloudflare.com/client/v4/zones?account.id=${accountId}&per_page=50`, {
+    headers: { Authorization: `Bearer ${apiToken}` },
+  });
+
+  const data = await res.json() as {
+    success: boolean;
+    result?: { id: string; name: string; status: string }[];
+    errors?: { message: string }[];
+  };
+
+  if (!data.success) {
+    return c.json({ error: data.errors?.[0]?.message || "Failed to fetch domains" }, 500);
+  }
+
+  const domains = (data.result ?? []).map((z) => ({
+    id: z.id,
+    name: z.name,
+    status: z.status,
+  }));
+
+  return c.json({ domains });
+});
+
 function maskValue(key: string, value: string): string {
-  if ((key.includes("SECRET") || key === "ADMIN_PASSWORD" || key === "RESEND_API_KEY") && value.length > 4) {
+  if ((key.includes("SECRET") || key === "ADMIN_PASSWORD" || key === "RESEND_API_KEY" || key === "CLOUDFLARE_API_TOKEN") && value.length > 4) {
     return value.slice(0, 4) + "****";
   }
   return value;
