@@ -27,7 +27,6 @@ const OUTLOOK_FIELDS: FieldConfig[] = [
 const GENERAL_FIELDS: FieldConfig[] = [
   { key: "ADMIN_PASSWORD", labelKey: "settings.fields.adminPassword", placeholderKey: "settings.fields.adminPasswordPlaceholder", sensitive: true },
   { key: "RESEND_API_KEY", labelKey: "settings.fields.resendApiKey", placeholderKey: "settings.fields.resendApiKeyPlaceholder", sensitive: true },
-  { key: "EMAIL_DOMAINS", labelKey: "settings.fields.emailDomains", placeholderKey: "settings.fields.emailDomainsPlaceholder", sensitive: false },
 ];
 
 export default function Settings() {
@@ -37,6 +36,9 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncingDomains, setSyncingDomains] = useState(false);
+  const [enabledDomains, setEnabledDomains] = useState<string[]>([]);
+  const [allDomains, setAllDomains] = useState<string[]>([]);
+  const [newDomain, setNewDomain] = useState("");
 
   useEffect(() => {
     getSettings()
@@ -46,6 +48,11 @@ export default function Settings() {
           ex[k] = { masked: v.masked, updated_at: v.updated_at };
         }
         setExisting(ex);
+        // 加载已启用的域名
+        const domainStr = res.settings.EMAIL_DOMAINS?.value || "";
+        const domains = domainStr.split(",").map((d: string) => d.trim()).filter(Boolean);
+        setEnabledDomains(domains);
+        setAllDomains(domains);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -58,7 +65,10 @@ export default function Settings() {
     setSyncingDomains(true);
     try {
       const res = await syncDomainsFromCloudflare();
-      handleChange("EMAIL_DOMAINS", res.domains.join(","));
+      // 合并：保留已有的，加入新发现的
+      const merged = [...new Set([...allDomains, ...res.domains])];
+      setAllDomains(merged);
+      setEnabledDomains(merged);
       toast.success(t("settings.domainsSynced", { count: res.domains.length }));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("settings.domainsSyncFailed"));
@@ -67,14 +77,31 @@ export default function Settings() {
     }
   };
 
+  const handleAddDomain = () => {
+    const d = newDomain.trim().toLowerCase();
+    if (!d || allDomains.includes(d)) return;
+    setAllDomains((prev) => [...prev, d]);
+    setEnabledDomains((prev) => [...prev, d]);
+    setNewDomain("");
+  };
+
+  const toggleDomain = (domain: string) => {
+    setEnabledDomains((prev) =>
+      prev.includes(domain) ? prev.filter((d) => d !== domain) : [...prev, domain]
+    );
+  };
+
+  const removeDomain = (domain: string) => {
+    setAllDomains((prev) => prev.filter((d) => d !== domain));
+    setEnabledDomains((prev) => prev.filter((d) => d !== domain));
+  };
+
   const handleSave = async () => {
-    const changed = Object.fromEntries(
+    const changed: Record<string, string> = Object.fromEntries(
       Object.entries(values).filter(([, v]) => v.length > 0)
     );
-    if (Object.keys(changed).length === 0) {
-      toast.info(t("settings.noChanges"));
-      return;
-    }
+    // 始终保存域名配置
+    changed.EMAIL_DOMAINS = enabledDomains.join(",");
 
     setSaving(true);
     try {
@@ -125,12 +152,72 @@ export default function Settings() {
         values={values}
         existing={existing}
         onChange={handleChange}
-        extraAction={
-          <Button variant="outline" size="sm" disabled={syncingDomains} onClick={handleSyncDomains}>
-            {syncingDomains ? t("settings.domainsSyncing") : t("settings.domainsSyncBtn")}
-          </Button>
-        }
       />
+
+      {/* Domain Management */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M2 12h20" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+              <div>
+                <CardTitle className="text-base">{t("settings.fields.emailDomains")}</CardTitle>
+                <CardDescription>{t("settings.domainsDescription")}</CardDescription>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" disabled={syncingDomains} onClick={handleSyncDomains}>
+              {syncingDomains ? t("settings.domainsSyncing") : t("settings.domainsSyncBtn")}
+            </Button>
+          </div>
+        </CardHeader>
+        <Separator />
+        <CardContent className="pt-4 space-y-3">
+          <div className="flex gap-2">
+            <Input
+              placeholder={t("settings.domainsAddPlaceholder")}
+              value={newDomain}
+              onChange={(e) => setNewDomain(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAddDomain()}
+              className="flex-1"
+            />
+            <Button variant="outline" size="sm" onClick={handleAddDomain} disabled={!newDomain.trim()}>
+              {t("settings.domainsAdd")}
+            </Button>
+          </div>
+          {allDomains.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {allDomains.map((domain) => (
+                <div
+                  key={domain}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm cursor-pointer transition-colors ${
+                    enabledDomains.includes(domain)
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted text-muted-foreground border-input"
+                  }`}
+                  onClick={() => toggleDomain(domain)}
+                >
+                  {domain}
+                  <button
+                    className="ml-1 opacity-60 hover:opacity-100"
+                    onClick={(e) => { e.stopPropagation(); removeDomain(domain); }}
+                  >
+                    x
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t("settings.domainsEmpty")}</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            {t("settings.domainsHint", { count: enabledDomains.length })}
+          </p>
+        </CardContent>
+      </Card>
 
       <SettingsSection
         title={t("settings.gmail")}
