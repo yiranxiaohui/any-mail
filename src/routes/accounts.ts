@@ -70,6 +70,7 @@ accounts.post("/import", async (c) => {
     }
 
     const email = parts[0]!;
+    const clientId = parts[2]!;
     const refreshToken = parts[3]!;
     if (!email.includes("@")) {
       results.push({ email, status: "invalid email" });
@@ -79,10 +80,10 @@ accounts.post("/import", async (c) => {
     const id = crypto.randomUUID();
     stmts.push(
       c.env.DB.prepare(
-        `INSERT INTO accounts (id, provider, email, refresh_token)
-         VALUES (?, 'outlook', ?, ?)
-         ON CONFLICT(email) DO UPDATE SET refresh_token=?, updated_at=datetime('now')`
-      ).bind(id, email.toLowerCase(), refreshToken, refreshToken)
+        `INSERT INTO accounts (id, provider, email, client_id, refresh_token)
+         VALUES (?, 'outlook', ?, ?, ?)
+         ON CONFLICT(email) DO UPDATE SET client_id=?, refresh_token=?, updated_at=datetime('now')`
+      ).bind(id, email.toLowerCase(), clientId, refreshToken, clientId, refreshToken)
     );
     results.push({ email, status: "ok" });
   }

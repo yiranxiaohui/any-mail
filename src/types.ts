@@ -12,6 +12,7 @@ export interface Account {
   id: string;
   provider: "domain" | "gmail" | "outlook";
   email: string;
+  client_id: string | null;
   access_token: string | null;
   refresh_token: string | null;
   token_expires_at: number | null;

@@ -70,6 +70,7 @@ export async function handleOutlookCallback(code: string, creds: OAuthCredential
     refresh_token: token.refresh_token,
     token_expires_at: expiresAt,
     last_sync_history_id: null,
+    client_id: null,
     expires_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -82,16 +83,22 @@ async function refreshOutlookToken(account: Account, creds: OAuthCredentials, db
     return account.access_token!;
   }
 
+  // 导入账号自带 client_id（公共客户端，无需 client_secret）
+  const useOwnClientId = !!account.client_id;
+  const params: Record<string, string> = {
+    client_id: useOwnClientId ? account.client_id! : creds.outlookClientId,
+    refresh_token: account.refresh_token!,
+    grant_type: "refresh_token",
+    scope: SCOPES,
+  };
+  if (!useOwnClientId && creds.outlookClientSecret) {
+    params.client_secret = creds.outlookClientSecret;
+  }
+
   const res = await fetch(MS_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: creds.outlookClientId,
-      client_secret: creds.outlookClientSecret,
-      refresh_token: account.refresh_token!,
-      grant_type: "refresh_token",
-      scope: SCOPES,
-    }),
+    body: new URLSearchParams(params),
   });
 
   const token = (await res.json()) as { access_token: string; expires_in: number };
