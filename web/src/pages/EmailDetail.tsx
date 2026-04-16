@@ -54,8 +54,8 @@ export default function EmailDetail() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] gap-4">
-      <div className="flex items-center justify-between shrink-0">
+    <div className="h-[calc(100vh-48px)] overflow-y-auto space-y-4">
+      <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
           <svg className="mr-1.5 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="m15 18-6-6 6-6" />
@@ -85,8 +85,8 @@ export default function EmailDetail() {
         </div>
       </div>
 
-      <Card className="flex flex-col min-h-0 flex-1">
-        <CardHeader className="pb-3 shrink-0">
+      <Card>
+        <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-3">
             <h1 className="text-xl font-bold leading-tight">
               {email.subject || t("inbox.noSubject")}
@@ -108,7 +108,7 @@ export default function EmailDetail() {
 
         <Separator />
 
-        <CardContent className="pt-4 overflow-y-auto flex-1 min-h-0">
+        <CardContent className="pt-4">
           {email.html_body ? (
             <Tabs defaultValue="html">
               <TabsList>
