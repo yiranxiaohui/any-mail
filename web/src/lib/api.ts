@@ -122,7 +122,7 @@ export function importAccounts(text: string) {
   });
 }
 
-export function updateAccount(id: string, data: { email?: string; expires_at?: string | null; client_id?: string | null; refresh_token?: string | null }) {
+export function updateAccount(id: string, data: { email?: string; password?: string | null; expires_at?: string | null; client_id?: string | null; refresh_token?: string | null }) {
   return request<{ ok: boolean }>(`/api/accounts/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },

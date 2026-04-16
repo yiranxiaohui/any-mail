@@ -85,6 +85,7 @@
     "editTitle": "编辑账户",
     "editFields": {
       "email": "邮箱地址",
+      "password": "密码",
       "clientId": "客户端 ID",
       "refreshToken": "令牌",
       "expiresAt": "有效期"

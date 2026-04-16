@@ -50,7 +50,7 @@ accounts.get("/", async (c) => {
 accounts.get("/:id", async (c) => {
   const id = c.req.param("id");
   const account = await c.env.DB.prepare(
-    "SELECT id, provider, email, client_id, refresh_token, expires_at, created_at, updated_at FROM accounts WHERE id = ?"
+    "SELECT id, provider, email, password, client_id, refresh_token, expires_at, created_at, updated_at FROM accounts WHERE id = ?"
   )
     .bind(id)
     .first();
@@ -105,6 +105,7 @@ accounts.post("/import", async (c) => {
     }
 
     let email: string;
+    let password = "";
     let clientId: string;
     let refreshToken: string;
 
@@ -114,6 +115,7 @@ accounts.post("/import", async (c) => {
     } else {
       // 格式: 邮箱----密码----client_id----refresh_token
       email = parts[0]!;
+      password = parts[1]!;
       clientId = parts[2]!;
       refreshToken = parts[3]!;
     }
@@ -125,10 +127,10 @@ accounts.post("/import", async (c) => {
     const id = crypto.randomUUID();
     stmts.push(
       c.env.DB.prepare(
-        `INSERT INTO accounts (id, provider, email, client_id, refresh_token)
-         VALUES (?, 'outlook', ?, ?, ?)
-         ON CONFLICT(email) DO UPDATE SET client_id=?, refresh_token=?, updated_at=datetime('now')`
-      ).bind(id, email.toLowerCase(), clientId, refreshToken, clientId, refreshToken)
+        `INSERT INTO accounts (id, provider, email, password, client_id, refresh_token)
+         VALUES (?, 'outlook', ?, ?, ?, ?)
+         ON CONFLICT(email) DO UPDATE SET password=?, client_id=?, refresh_token=?, updated_at=datetime('now')`
+      ).bind(id, email.toLowerCase(), password || null, clientId, refreshToken, password || null, clientId, refreshToken)
     );
     results.push({ email, status: "ok" });
   }
@@ -148,7 +150,7 @@ accounts.post("/import", async (c) => {
 /** 编辑账号信息 */
 accounts.patch("/:id", async (c) => {
   const id = c.req.param("id");
-  const body = await c.req.json<{ email?: string; expires_at?: string | null; client_id?: string | null; refresh_token?: string | null }>();
+  const body = await c.req.json<{ email?: string; password?: string | null; expires_at?: string | null; client_id?: string | null; refresh_token?: string | null }>();
 
   const fields: string[] = [];
   const values: (string | null)[] = [];
@@ -156,6 +158,10 @@ accounts.patch("/:id", async (c) => {
   if (body.email !== undefined) {
     fields.push("email = ?");
     values.push(body.email.trim().toLowerCase());
+  }
+  if (body.password !== undefined) {
+    fields.push("password = ?");
+    values.push(body.password);
   }
   if (body.expires_at !== undefined) {
     fields.push("expires_at = ?");

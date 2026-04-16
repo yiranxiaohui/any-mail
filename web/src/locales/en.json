@@ -85,6 +85,7 @@
     "editTitle": "Edit Account",
     "editFields": {
       "email": "Email",
+      "password": "Password",
       "clientId": "Client ID",
       "refreshToken": "Refresh Token",
       "expiresAt": "Expires At"

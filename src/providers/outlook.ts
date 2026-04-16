@@ -70,6 +70,7 @@ export async function handleOutlookCallback(code: string, creds: OAuthCredential
     refresh_token: token.refresh_token,
     token_expires_at: expiresAt,
     last_sync_history_id: null,
+    password: null,
     client_id: null,
     expires_at: null,
     created_at: new Date().toISOString(),

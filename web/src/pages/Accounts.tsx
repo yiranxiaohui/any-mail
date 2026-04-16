@@ -34,6 +34,7 @@ export default function Accounts() {
   // Edit
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [editEmail, setEditEmail] = useState("");
+  const [editPassword, setEditPassword] = useState("");
   const [editClientId, setEditClientId] = useState("");
   const [editRefreshToken, setEditRefreshToken] = useState("");
   const [editExpiry, setEditExpiry] = useState("");
@@ -126,11 +127,13 @@ export default function Accounts() {
     setEditAccount(account);
     setEditEmail(account.email);
     setEditExpiry(account.expires_at ?? "");
+    setEditPassword("");
     setEditClientId("");
     setEditRefreshToken("");
     setEditLoading(true);
     try {
       const detail = await getAccount(account.id);
+      setEditPassword((detail as unknown as Record<string, string | null>).password ?? "");
       setEditClientId(detail.client_id ?? "");
       setEditRefreshToken(detail.refresh_token ?? "");
     } finally {
@@ -144,6 +147,7 @@ export default function Accounts() {
     try {
       await updateAccount(editAccount.id, {
         email: editEmail.trim().toLowerCase(),
+        password: editPassword || null,
         expires_at: editExpiry || null,
         client_id: editClientId || null,
         refresh_token: editRefreshToken || null,
@@ -301,6 +305,15 @@ export default function Accounts() {
               </div>
               {editAccount?.provider === "outlook" && (
                 <>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">{t("accounts.editFields.password")}</label>
+                    <Input
+                      type="password"
+                      value={editPassword}
+                      onChange={(e) => setEditPassword(e.target.value)}
+                      placeholder={t("accounts.editFields.password")}
+                    />
+                  </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium">{t("accounts.editFields.clientId")}</label>
                     <Input
