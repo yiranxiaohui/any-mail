@@ -16,8 +16,7 @@ function HtmlBodyFrame({ html }: { html: string }) {
     <iframe
       srcDoc={srcDoc}
       sandbox="allow-popups allow-popups-to-escape-sandbox"
-      className="w-full rounded-md border bg-white"
-      style={{ height: "calc(100vh - 340px)", minHeight: 320 }}
+      className="h-full w-full rounded-md border bg-white"
       title="email-html"
     />
   );
@@ -68,8 +67,8 @@ export default function EmailDetail() {
   }
 
   return (
-    <div className="h-[calc(100vh-48px)] overflow-y-auto space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="flex h-[calc(100vh-48px)] flex-col gap-3">
+      <div className="flex flex-shrink-0 items-center justify-between">
         <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
           <svg className="mr-1.5 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="m15 18-6-6 6-6" />
@@ -99,10 +98,10 @@ export default function EmailDetail() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
+      <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden py-0">
+        <CardHeader className="flex-shrink-0 px-4 py-2.5">
           <div className="flex items-start justify-between gap-3">
-            <h1 className="text-xl font-bold leading-tight">
+            <h1 className="text-base font-semibold leading-snug">
               {email.subject || t("inbox.noSubject")}
             </h1>
             <ProviderBadge provider={email.provider} />
@@ -111,35 +110,35 @@ export default function EmailDetail() {
 
         <Separator />
 
-        <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 px-6 py-4 text-sm">
-          <span className="text-muted-foreground font-medium">{t("email.from")}</span>
-          <span>{email.from_address}</span>
-          <span className="text-muted-foreground font-medium">{t("email.to")}</span>
-          <span>{email.to_address}</span>
-          <span className="text-muted-foreground font-medium">{t("email.date")}</span>
+        <div className="flex-shrink-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 px-4 py-2 text-sm">
+          <span className="text-muted-foreground">{t("email.from")}</span>
+          <span className="truncate">{email.from_address}</span>
+          <span className="text-muted-foreground">{t("email.to")}</span>
+          <span className="truncate">{email.to_address}</span>
+          <span className="text-muted-foreground">{t("email.date")}</span>
           <span>{new Date(email.received_at).toLocaleString()}</span>
         </div>
 
         <Separator />
 
-        <CardContent className="pt-4">
+        <CardContent className="flex min-h-0 flex-1 flex-col gap-2 px-4 py-2.5">
           {email.html_body ? (
-            <Tabs defaultValue="html">
-              <TabsList>
+            <Tabs defaultValue="html" className="flex min-h-0 flex-1 flex-col">
+              <TabsList className="flex-shrink-0">
                 <TabsTrigger value="html">{t("email.html")}</TabsTrigger>
                 <TabsTrigger value="text">{t("email.text")}</TabsTrigger>
               </TabsList>
-              <TabsContent value="html" className="mt-4">
+              <TabsContent value="html" className="min-h-0 flex-1">
                 <HtmlBodyFrame html={email.html_body} />
               </TabsContent>
-              <TabsContent value="text" className="mt-4">
+              <TabsContent value="text" className="min-h-0 flex-1 overflow-auto rounded-md border p-4">
                 <pre className="whitespace-pre-wrap break-words text-sm leading-relaxed font-sans">
                   {email.text_body || t("email.empty")}
                 </pre>
               </TabsContent>
             </Tabs>
           ) : (
-            <pre className="whitespace-pre-wrap break-words text-sm leading-relaxed font-sans">
+            <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-md border p-4 text-sm leading-relaxed font-sans">
               {email.text_body || t("email.empty")}
             </pre>
           )}
