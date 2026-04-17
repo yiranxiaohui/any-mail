@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getEmail, deleteEmail, type Email } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -10,35 +10,14 @@ import ProviderBadge from "@/components/ProviderBadge";
 import { toast } from "sonner";
 
 function HtmlBodyFrame({ html }: { html: string }) {
-  const ref = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState(400);
-
-  const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif;color:#111;background:#fff;word-wrap:break-word;overflow-wrap:break-word}img{max-width:100%;height:auto}</style></head><body>${html}</body></html>`;
-
-  useEffect(() => {
-    const iframe = ref.current;
-    if (!iframe) return;
-    const resize = () => {
-      const doc = iframe.contentDocument;
-      if (!doc) return;
-      const h = Math.max(doc.documentElement.scrollHeight, doc.body?.scrollHeight ?? 0);
-      if (h > 0) setHeight(h + 16);
-    };
-    iframe.addEventListener("load", resize);
-    const interval = window.setInterval(resize, 500);
-    return () => {
-      iframe.removeEventListener("load", resize);
-      window.clearInterval(interval);
-    };
-  }, [html]);
+  const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif;color:#111;background:#fff;word-wrap:break-word;overflow-wrap:break-word}body{padding:16px}img{max-width:100%;height:auto}</style></head><body>${html}</body></html>`;
 
   return (
     <iframe
-      ref={ref}
       srcDoc={srcDoc}
       sandbox="allow-popups allow-popups-to-escape-sandbox"
       className="w-full rounded-md border bg-white"
-      style={{ height }}
+      style={{ height: "calc(100vh - 340px)", minHeight: 320 }}
       title="email-html"
     />
   );
