@@ -228,6 +228,7 @@
       "emails:delete": "Delete emails",
       "accounts:read": "Read accounts",
       "accounts:write": "Manage accounts",
+      "domains:read": "Read available domains",
       "*": "All permissions"
     }
   },

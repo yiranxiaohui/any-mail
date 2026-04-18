@@ -228,6 +228,7 @@
       "emails:delete": "删除邮件",
       "accounts:read": "读取账号",
       "accounts:write": "管理账号",
+      "domains:read": "读取可用域名",
       "*": "全部权限"
     }
   },

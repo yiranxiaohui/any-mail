@@ -9,6 +9,7 @@ export type Scope =
   | "emails:delete"
   | "accounts:read"
   | "accounts:write"
+  | "domains:read"
   | "*";
 
 export interface ApiKeyContext {

@@ -40,6 +40,7 @@ API keys rejected at route level return `403`:
 | `emails:delete` | `DELETE /api/emails/:id` |
 | `accounts:read` | List / get accounts |
 | `accounts:write` | Create / import / edit / reauth / sync / delete accounts |
+| `domains:read` | `GET /api/domains` (list configured email domains) |
 | `*` | All of the above |
 
 ### Provider restriction
@@ -856,6 +857,29 @@ Revoke (delete) an API key. Subsequent requests using it return `401`.
 
 ---
 
+### Domains (public)
+
+#### `GET /api/domains`
+
+Return the list of configured email domains. Intended for external clients (e.g. code-reception scripts) that need to discover which domains they can create mailboxes under.
+
+**Required scope:** `domains:read`
+
+**Response:**
+
+```json
+{
+  "domains": [
+    { "name": "mail.example.com" },
+    { "name": "alt.example.com" }
+  ]
+}
+```
+
+Empty list when no domains are configured. Same data as the admin-only `GET /api/settings/domains`, but exposed through a dedicated scope so API keys can call it without touching settings.
+
+---
+
 ### Sync
 
 #### `POST /api/sync`
@@ -912,4 +936,5 @@ Manually trigger email sync for all Gmail and Outlook accounts.
 | POST | `/api/keys` | Yes | Create API key (JWT only) |
 | PATCH | `/api/keys/:id` | Yes | Update API key (JWT only) |
 | DELETE | `/api/keys/:id` | Yes | Revoke API key (JWT only) |
+| GET | `/api/domains` | Yes | List configured email domains (scope: `domains:read`) |
 | POST | `/api/sync` | Yes | Trigger email sync for all accounts (JWT only) |

@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getApiKeys, createApiKey, deleteApiKey, type ApiKey } from "@/lib/api";
 
-const ALL_SCOPES = ["emails:read", "emails:send", "emails:delete", "accounts:read", "accounts:write"] as const;
+const ALL_SCOPES = ["emails:read", "emails:send", "emails:delete", "accounts:read", "accounts:write", "domains:read"] as const;
 
 export default function ApiKeys() {
   const { t } = useTranslation();

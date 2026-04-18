@@ -41,6 +41,16 @@ app.route("/api/accounts", accountsRoute);
 app.route("/api/settings", settingsRoute);
 app.route("/api/keys", apiKeysRoute);
 
+// 公开域名列表（API key 可通过 domains:read 访问，用于外部程序发现可用域名）
+app.get("/api/domains", requireScope("domains:read"), async (c) => {
+  const row = await c.env.DB.prepare("SELECT value FROM settings WHERE key = 'EMAIL_DOMAINS'")
+    .first<{ value: string }>();
+  const domains = row?.value
+    ? row.value.split(",").map((d) => d.trim()).filter(Boolean).map((name) => ({ name }))
+    : [];
+  return c.json({ domains });
+});
+
 // 手动触发同步（全部）— 仅限 JWT（管理员操作）
 app.post("/api/sync", requireJwt(), async (c) => {
   const result = await syncAllAccounts(c.env);

@@ -8,6 +8,7 @@ const VALID_SCOPES = new Set([
   "emails:delete",
   "accounts:read",
   "accounts:write",
+  "domains:read",
   "*",
 ]);
 
