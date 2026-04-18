@@ -6,19 +6,21 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { getApiKeys, createApiKey, deleteApiKey, type ApiKey } from "@/lib/api";
+import { getApiKeys, createApiKey, updateApiKey, deleteApiKey, type ApiKey } from "@/lib/api";
 
 const ALL_SCOPES = ["emails:read", "emails:send", "emails:delete", "accounts:read", "accounts:write", "domains:read"] as const;
 
 // i18next uses ':' as namespace separator, so scope keys are stored with '_' in JSON.
 const scopeLabelKey = (scope: string) => `apiKeys.scopeLabels.${scope === "*" ? "all" : scope.replace(":", "_")}`;
 
+type DialogMode = { kind: "create" } | { kind: "edit"; id: string };
+
 export default function ApiKeys() {
   const { t } = useTranslation();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [mode, setMode] = useState<DialogMode | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // form
   const [name, setName] = useState("");
@@ -26,7 +28,7 @@ export default function ApiKeys() {
   const [provider, setProvider] = useState<string>("");
   const [expiresAt, setExpiresAt] = useState("");
 
-  // plaintext reveal
+  // plaintext reveal (create only)
   const [plaintext, setPlaintext] = useState<{ key: string; name: string } | null>(null);
 
   const fetchKeys = async () => {
@@ -50,29 +52,55 @@ export default function ApiKeys() {
     setExpiresAt("");
   };
 
+  const openCreate = () => {
+    resetForm();
+    setMode({ kind: "create" });
+  };
+
+  const openEdit = (key: ApiKey) => {
+    setName(key.name);
+    setScopes(key.scopes.split(",").filter(Boolean));
+    setProvider(key.provider ?? "");
+    setExpiresAt(key.expires_at ? key.expires_at.slice(0, 16) : "");
+    setMode({ kind: "edit", id: key.id });
+  };
+
+  const closeDialog = () => {
+    setMode(null);
+    resetForm();
+  };
+
   const toggleScope = (s: string) => {
     setScopes((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   };
 
-  const handleCreate = async () => {
-    if (!name.trim() || scopes.length === 0) return;
-    setCreating(true);
+  const handleSave = async () => {
+    if (!mode || !name.trim() || scopes.length === 0) return;
+    setSaving(true);
     try {
-      const res = await createApiKey({
+      const payload = {
         name: name.trim(),
         scopes,
         provider: provider || null,
         expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
-      });
-      toast.success(t("apiKeys.created", { name: res.key.name }));
-      setDialogOpen(false);
-      setPlaintext({ key: res.plaintext, name: res.key.name });
-      resetForm();
+      };
+      if (mode.kind === "create") {
+        const res = await createApiKey(payload);
+        toast.success(t("apiKeys.created", { name: res.key.name }));
+        setMode(null);
+        setPlaintext({ key: res.plaintext, name: res.key.name });
+        resetForm();
+      } else {
+        await updateApiKey(mode.id, payload);
+        toast.success(t("apiKeys.updated", { name: payload.name }));
+        closeDialog();
+      }
       fetchKeys();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("apiKeys.createFailed"));
+      const fallback = mode.kind === "create" ? t("apiKeys.createFailed") : t("apiKeys.updateFailed");
+      toast.error(err instanceof Error ? err.message : fallback);
     } finally {
-      setCreating(false);
+      setSaving(false);
     }
   };
 
@@ -100,6 +128,8 @@ export default function ApiKeys() {
     return p;
   };
 
+  const isEdit = mode?.kind === "edit";
+
   return (
     <div className="flex flex-col h-[calc(100vh-48px)] gap-6">
       <div className="flex items-center justify-between shrink-0">
@@ -107,7 +137,7 @@ export default function ApiKeys() {
           <h1 className="text-2xl font-bold tracking-tight">{t("apiKeys.title")}</h1>
           <p className="text-sm text-muted-foreground">{t("apiKeys.description")}</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
+        <Button onClick={openCreate}>
           <svg className="mr-1.5 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" x2="12" y1="5" y2="19" />
             <line x1="5" x2="19" y1="12" y2="12" />
@@ -116,11 +146,13 @@ export default function ApiKeys() {
         </Button>
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={!!mode} onOpenChange={(open) => { if (!open) closeDialog(); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{t("apiKeys.create")}</DialogTitle>
-            <DialogDescription>{t("apiKeys.description")}</DialogDescription>
+            <DialogTitle>{isEdit ? t("apiKeys.editTitle") : t("apiKeys.create")}</DialogTitle>
+            <DialogDescription>
+              {isEdit ? t("apiKeys.editDescription") : t("apiKeys.description")}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-1.5">
@@ -174,10 +206,10 @@ export default function ApiKeys() {
             </div>
             <Button
               className="w-full"
-              onClick={handleCreate}
-              disabled={creating || !name.trim() || scopes.length === 0}
+              onClick={handleSave}
+              disabled={saving || !name.trim() || scopes.length === 0}
             >
-              {creating ? t("settings.saving") : t("apiKeys.create")}
+              {saving ? t("settings.saving") : isEdit ? t("settings.save") : t("apiKeys.create")}
             </Button>
           </div>
         </DialogContent>
@@ -270,14 +302,23 @@ export default function ApiKeys() {
                           : t("apiKeys.expires", { date: new Date(key.expires_at).toLocaleString() })}
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
-                    onClick={() => handleRevoke(key)}
-                  >
-                    {t("apiKeys.revoke")}
-                  </Button>
+                  <div className="flex gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openEdit(key)}
+                    >
+                      {t("apiKeys.edit")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => handleRevoke(key)}
+                    >
+                      {t("apiKeys.revoke")}
+                    </Button>
+                  </div>
                 </div>
               );
             })}
