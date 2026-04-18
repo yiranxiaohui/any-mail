@@ -223,13 +223,13 @@
     "plaintextWarning": "请立即复制并保存此密钥。关闭后将无法再次查看。",
     "plaintextDone": "我已保存",
     "scopeLabels": {
-      "emails:read": "读取邮件",
-      "emails:send": "发送邮件",
-      "emails:delete": "删除邮件",
-      "accounts:read": "读取账号",
-      "accounts:write": "管理账号",
-      "domains:read": "读取可用域名",
-      "*": "全部权限"
+      "emails_read": "读取邮件",
+      "emails_send": "发送邮件",
+      "emails_delete": "删除邮件",
+      "accounts_read": "读取账号",
+      "accounts_write": "管理账号",
+      "domains_read": "读取可用域名",
+      "all": "全部权限"
     }
   },
   "language": {

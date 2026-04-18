@@ -223,13 +223,13 @@
     "plaintextWarning": "Copy this key now. You won't be able to see it again after closing.",
     "plaintextDone": "I've saved it",
     "scopeLabels": {
-      "emails:read": "Read emails",
-      "emails:send": "Send emails",
-      "emails:delete": "Delete emails",
-      "accounts:read": "Read accounts",
-      "accounts:write": "Manage accounts",
-      "domains:read": "Read available domains",
-      "*": "All permissions"
+      "emails_read": "Read emails",
+      "emails_send": "Send emails",
+      "emails_delete": "Delete emails",
+      "accounts_read": "Read accounts",
+      "accounts_write": "Manage accounts",
+      "domains_read": "Read available domains",
+      "all": "All permissions"
     }
   },
   "language": {

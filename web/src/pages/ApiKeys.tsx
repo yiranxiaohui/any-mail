@@ -10,6 +10,9 @@ import { getApiKeys, createApiKey, deleteApiKey, type ApiKey } from "@/lib/api";
 
 const ALL_SCOPES = ["emails:read", "emails:send", "emails:delete", "accounts:read", "accounts:write", "domains:read"] as const;
 
+// i18next uses ':' as namespace separator, so scope keys are stored with '_' in JSON.
+const scopeLabelKey = (scope: string) => `apiKeys.scopeLabels.${scope === "*" ? "all" : scope.replace(":", "_")}`;
+
 export default function ApiKeys() {
   const { t } = useTranslation();
   const [keys, setKeys] = useState<ApiKey[]>([]);
@@ -142,7 +145,7 @@ export default function ApiKeys() {
                         : "bg-background text-muted-foreground border-input hover:bg-accent"
                     }`}
                   >
-                    {t(`apiKeys.scopeLabels.${s}`)}
+                    {t(scopeLabelKey(s))}
                   </button>
                 ))}
               </div>
@@ -249,7 +252,7 @@ export default function ApiKeys() {
                     <div className="flex flex-wrap gap-1">
                       {scopesList.map((s) => (
                         <span key={s} className="text-xs rounded-md bg-accent px-1.5 py-0.5 text-accent-foreground">
-                          {t(`apiKeys.scopeLabels.${s}`, { defaultValue: s })}
+                          {t(scopeLabelKey(s), { defaultValue: s })}
                         </span>
                       ))}
                     </div>
