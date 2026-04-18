@@ -92,9 +92,9 @@ Authorization: Bearer ak_xxxxxxxx...
 
 ### 4.1 推荐轮询参数
 
-- **`since`**: 必传,始终传上一次请求的时间戳,避免拉到旧邮件。首次用当前时间即可。
+- **`since`**: 技术上可选,但强烈建议传 —— 否则每次轮询都会翻历史邮件。**应在调用 `POST /api/accounts` 之前记录时间戳**,避免漏掉创建与首次轮询之间到达的邮件。
 - **`limit`**: 默认 10,可省略。
-- **`code_regex`**: 服务端正则匹配,返回 `code` 字段,省去客户端解析。常用:
+- **`code_regex`**: 服务端正则匹配,命中时返回 `code` 字段;未命中返回 `"code": null`。常用:
   - 6 位数字:`\d{6}`
   - 带标签:`code[:：]\s*(\d{4,8})` —— 使用捕获组,返回第 1 组
   - 字母数字混合:`[A-Z0-9]{6}`
@@ -216,7 +216,7 @@ curl -X DELETE https://your-anymail.example.com/api/accounts/8f3e2a... \
   -H "Authorization: Bearer ak_xxxxx"
 ```
 
-同时删除该账号名下所有邮件。不主动删也没问题 —— 配置了 `expires_at` 会自然过期(过期后邮件仍保留,但前端会标记;删除逻辑由你决定)。
+同时删除该账号名下所有邮件。不主动删也没问题 —— `expires_at` 仅用于前端标记,**后端不会自动删除过期账号或其邮件**。若需要清理,自行调用本接口或在后台页面操作。
 
 ---
 
@@ -267,9 +267,9 @@ def delete_mailbox(account_id: str) -> None:
     httpx.delete(f"{BASE}/api/accounts/{account_id}", headers=headers(), timeout=10)
 
 # 用法
+since = datetime.now(timezone.utc).isoformat()  # 先记录时间,再建邮箱
 acct = create_mailbox()
 print(f"mailbox: {acct['email']}")
-since = datetime.now(timezone.utc).isoformat()
 # ... 把 acct["email"] 提交给目标服务,让它发验证码 ...
 code = poll_code(acct["email"], since)
 print(f"code: {code}")
@@ -320,8 +320,8 @@ async function deleteMailbox(id) {
 }
 
 // 用法
+const since = new Date().toISOString();  // 先记录时间,再建邮箱
 const acct = await createMailbox();
-const since = new Date().toISOString();
 // ... 触发目标服务发送验证码 ...
 const code = await pollCode(acct.email, since);
 console.log("code:", code);
@@ -334,14 +334,16 @@ await deleteMailbox(acct.id);
 KEY="ak_xxxxx"
 BASE="https://your-anymail.example.com"
 
-# 1. 创建邮箱
+# 1. 先记录 since(建邮箱之前),避免漏掉竞态窗口里的邮件
+SINCE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+
+# 2. 创建邮箱
 curl -sX POST "$BASE/api/accounts" \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
   -d '{"email":"test01@mail.example.com"}' | jq
 
-# 2. 轮询(5 秒间隔,最多 1 分钟)
-SINCE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+# 3. 轮询(5 秒间隔,最多 1 分钟)
 for i in {1..12}; do
   RESP=$(curl -sG "$BASE/api/emails/latest" \
     -H "Authorization: Bearer $KEY" \
@@ -373,7 +375,7 @@ done
 ## 8. 最佳实践
 
 1. **每次注册用不同邮箱**。前缀加随机串(UUID / 时间戳 + 随机数),避免与历史邮件混淆。
-2. **`since` 用创建邮箱后的瞬间**,不要用 `new Date()` 作为初始值 —— 否则会漏掉在创建和首轮询之间到达的邮件。更安全的做法:记录创建账号请求开始前的时间。
+2. **`since` 应在调用 `POST /api/accounts` *之前* 记录**。若用首次轮询时的 `now()` 作为 `since`,会漏掉在"建邮箱完成 → 首次轮询"这段窗口内到达的邮件(这段窗口可能长达几百毫秒到几秒)。
 3. **码提取尽量在服务端做**(传 `code_regex`)。不仅省一次往返,也可避免客户端正则差异。
 4. **正则用捕获组**定位真正的码,例如 `code[^\d]*(\d{6})` 比 `\d{6}` 更准确,能避开日期数字。
 5. **key 最小权限**。接码只读场景就别给 `accounts:write`;短期任务设 `expires_at`。

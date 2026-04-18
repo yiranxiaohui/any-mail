@@ -152,7 +152,7 @@ Polling-friendly endpoint for external clients (verification-code reception, etc
 | `to` | string | — | LIKE match on recipient |
 | `since` | ISO datetime | — | Only return emails with `received_at > since` |
 | `limit` | integer | 10 | Max 50 |
-| `code_regex` | string | — | If set, apply regex to `text_body` / `html_body` / `subject`; captured group 1 (or full match) is returned as `code` |
+| `code_regex` | string | — | If set, apply regex to `text_body` / `html_body` / `subject`; captured group 1 (or full match) is returned as `code`. On no match, `code` is `null`. When omitted, the `code` field is not included at all |
 
 If the key is bound to a `provider`, results are automatically filtered to that provider.
 
