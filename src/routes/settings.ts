@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
+import { requireJwt, type ApiKeyContext } from "../auth";
 
 const ALLOWED_KEYS = [
   "ADMIN_PASSWORD",
@@ -13,7 +14,10 @@ const ALLOWED_KEYS = [
   "OUTLOOK_CLIENT_SECRET",
 ];
 
-const settings = new Hono<{ Bindings: Env }>();
+const settings = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext } }>();
+
+// 设置页面（含管理员密码等敏感数据）仅限 JWT
+settings.use("*", requireJwt());
 
 /** 获取所有设置（敏感值脱敏） */
 settings.get("/", async (c) => {

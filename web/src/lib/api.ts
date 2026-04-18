@@ -188,3 +188,31 @@ export function syncDomainsFromCloudflare() {
 export const gmailAuthUrl = `${BASE}/api/oauth/gmail`;
 export const outlookAuthUrl = `${BASE}/api/oauth/outlook`;
 export const outlookReauthUrl = (clientId: string) => `${BASE}/api/oauth/outlook/reauth?client_id=${encodeURIComponent(clientId)}`;
+
+// API Keys
+export interface ApiKey {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string;          // comma-separated on the wire
+  provider: string | null;
+  expires_at: string | null;
+  last_used_at: string | null;
+  created_at: string;
+}
+
+export function getApiKeys() {
+  return request<{ keys: ApiKey[] }>("/api/keys");
+}
+
+export function createApiKey(data: { name: string; scopes: string[]; provider: string | null; expires_at: string | null }) {
+  return request<{ ok: boolean; key: Omit<ApiKey, "last_used_at" | "created_at">; plaintext: string }>("/api/keys", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteApiKey(id: string) {
+  return request<{ ok: boolean }>(`/api/keys/${id}`, { method: "DELETE" });
+}

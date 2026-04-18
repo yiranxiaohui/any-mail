@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Env, Account } from "./types";
-import { login, authMiddleware } from "./auth";
+import { login, authMiddleware, requireJwt, requireScope, type ApiKeyContext } from "./auth";
 import { handleDomainEmail } from "./providers/domain";
 import { syncGmailEmails } from "./providers/gmail";
 import { syncOutlookEmails } from "./providers/outlook";
@@ -10,8 +10,9 @@ import emailsRoute from "./routes/emails";
 import accountsRoute from "./routes/accounts";
 import oauthRoute from "./routes/oauth";
 import settingsRoute from "./routes/settings";
+import apiKeysRoute from "./routes/api-keys";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext } }>();
 
 app.use("/*", cors());
 
@@ -38,21 +39,26 @@ app.use("/api/*", authMiddleware());
 app.route("/api/emails", emailsRoute);
 app.route("/api/accounts", accountsRoute);
 app.route("/api/settings", settingsRoute);
+app.route("/api/keys", apiKeysRoute);
 
-// 手动触发同步（全部）
-app.post("/api/sync", async (c) => {
+// 手动触发同步（全部）— 仅限 JWT（管理员操作）
+app.post("/api/sync", requireJwt(), async (c) => {
   const result = await syncAllAccounts(c.env);
   return c.json(result);
 });
 
-// 同步单个账号
-app.post("/api/accounts/:id/sync", async (c) => {
+// 同步单个账号 — 要求 accounts:write（API key 若绑定 provider，会在下面校验）
+app.post("/api/accounts/:id/sync", requireScope("accounts:write"), async (c) => {
   const id = c.req.param("id");
   const account = await c.env.DB.prepare("SELECT * FROM accounts WHERE id = ?")
     .bind(id)
     .first<Account>();
 
   if (!account) return c.json({ error: "not found" }, 404);
+  const key = c.get("apiKey");
+  if (key?.provider && account.provider !== key.provider) {
+    return c.json({ error: "not found" }, 404);
+  }
   if (account.provider === "domain") return c.json({ error: "domain accounts receive email passively" }, 400);
 
   const creds = await getOAuthCredentials(c.env);

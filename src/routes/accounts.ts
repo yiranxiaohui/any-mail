@@ -1,14 +1,18 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
+import { requireScope, type ApiKeyContext } from "../auth";
 
-const accounts = new Hono<{ Bindings: Env }>();
+const accounts = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext } }>();
 
 /** 列出邮箱账号（支持分页和搜索） */
-accounts.get("/", async (c) => {
+accounts.get("/", requireScope("accounts:read"), async (c) => {
   const search = c.req.query("search");
-  const provider = c.req.query("provider");
+  const providerQuery = c.req.query("provider");
   const limit = Math.min(parseInt(c.req.query("limit") ?? "20"), 100);
   const offset = parseInt(c.req.query("offset") ?? "0");
+
+  const keyProvider = c.get("apiKey")?.provider ?? null;
+  const provider = keyProvider ?? providerQuery;
 
   let sql = "SELECT id, provider, email, expires_at, created_at, updated_at FROM accounts";
   let countSql = "SELECT COUNT(*) as total FROM accounts";
@@ -47,20 +51,30 @@ accounts.get("/", async (c) => {
 });
 
 /** 查询单个账号 */
-accounts.get("/:id", async (c) => {
+accounts.get("/:id", requireScope("accounts:read"), async (c) => {
   const id = c.req.param("id");
+  const keyProvider = c.get("apiKey")?.provider ?? null;
   const account = await c.env.DB.prepare(
     "SELECT id, provider, email, password, client_id, refresh_token, expires_at, created_at, updated_at FROM accounts WHERE id = ?"
   )
     .bind(id)
-    .first();
+    .first<{ provider: string }>();
 
   if (!account) return c.json({ error: "not found" }, 404);
+  if (keyProvider && account.provider !== keyProvider) {
+    return c.json({ error: "not found" }, 404);
+  }
   return c.json(account);
 });
 
 /** 创建域名邮箱账号，支持过期时间 */
-accounts.post("/", async (c) => {
+accounts.post("/", requireScope("accounts:write"), async (c) => {
+  // API key 必须绑定 provider=domain 才能创建域名邮箱
+  const key = c.get("apiKey");
+  if (key && key.provider !== "domain") {
+    return c.json({ error: "api key must be bound to provider=domain to create accounts" }, 403);
+  }
+
   const body = await c.req.json<{ email: string; expires_at?: string | null }>();
   const email = body.email?.trim().toLowerCase();
   if (!email || !email.includes("@")) {
@@ -87,7 +101,12 @@ accounts.post("/", async (c) => {
  *  格式：每行一个，字段用 ---- 分隔
  *  账号----密码----ssid----令牌(refresh_token)
  */
-accounts.post("/import", async (c) => {
+accounts.post("/import", requireScope("accounts:write"), async (c) => {
+  const key = c.get("apiKey");
+  if (key && key.provider !== "outlook") {
+    return c.json({ error: "api key must be bound to provider=outlook to import accounts" }, 403);
+  }
+
   const body = await c.req.json<{ text: string }>();
   if (!body.text?.trim()) {
     return c.json({ error: "empty input" }, 400);
@@ -147,9 +166,27 @@ accounts.post("/import", async (c) => {
   return c.json({ ok: true, total: lines.length, success, results });
 });
 
+async function assertKeyProviderMatches(
+  c: { env: Env; get: (k: string) => ApiKeyContext | undefined },
+  id: string,
+): Promise<Response | null> {
+  const key = c.get("apiKey");
+  if (!key?.provider) return null;
+  const row = await c.env.DB.prepare("SELECT provider FROM accounts WHERE id = ?")
+    .bind(id).first<{ provider: string }>();
+  if (!row) return new Response(JSON.stringify({ error: "not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+  if (row.provider !== key.provider) {
+    return new Response(JSON.stringify({ error: "not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+  }
+  return null;
+}
+
 /** 编辑账号信息 */
-accounts.patch("/:id", async (c) => {
-  const id = c.req.param("id");
+accounts.patch("/:id", requireScope("accounts:write"), async (c) => {
+  const id = c.req.param("id")!;
+  const guard = await assertKeyProviderMatches(c, id);
+  if (guard) return guard;
+
   const body = await c.req.json<{ email?: string; password?: string | null; expires_at?: string | null; client_id?: string | null; refresh_token?: string | null }>();
 
   const fields: string[] = [];
@@ -191,8 +228,11 @@ accounts.patch("/:id", async (c) => {
 });
 
 /** 用账号密码重新获取 refresh_token (ROPC) */
-accounts.post("/:id/reauth", async (c) => {
-  const id = c.req.param("id");
+accounts.post("/:id/reauth", requireScope("accounts:write"), async (c) => {
+  const id = c.req.param("id")!;
+  const guard = await assertKeyProviderMatches(c, id);
+  if (guard) return guard;
+
   const account = await c.env.DB.prepare(
     "SELECT id, email, password, client_id FROM accounts WHERE id = ?"
   ).bind(id).first<{ id: string; email: string; password: string | null; client_id: string | null }>();
@@ -240,8 +280,11 @@ accounts.post("/:id/reauth", async (c) => {
 });
 
 /** 删除账号及其所有邮件 */
-accounts.delete("/:id", async (c) => {
-  const id = c.req.param("id");
+accounts.delete("/:id", requireScope("accounts:write"), async (c) => {
+  const id = c.req.param("id")!;
+  const guard = await assertKeyProviderMatches(c, id);
+  if (guard) return guard;
+
   await c.env.DB.batch([
     c.env.DB.prepare("DELETE FROM emails WHERE account_id = ?").bind(id),
     c.env.DB.prepare("DELETE FROM accounts WHERE id = ?").bind(id),

@@ -3,6 +3,20 @@ import type { Env } from "./types";
 
 const TOKEN_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+export type Scope =
+  | "emails:read"
+  | "emails:send"
+  | "emails:delete"
+  | "accounts:read"
+  | "accounts:write"
+  | "*";
+
+export interface ApiKeyContext {
+  id: string;
+  scopes: string[];
+  provider: string | null;
+}
+
 /** 生成 token：base64(payload).base64(signature) */
 async function signToken(payload: Record<string, unknown>, secret: string): Promise<string> {
   const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
@@ -65,20 +79,106 @@ export async function login(password: string, env: { DB: D1Database; JWT_SECRET:
   return token;
 }
 
-/** Hono 中间件：验证 Authorization header */
+/** 生成一把新的 API key（明文），返回 { plaintext, hash, prefix } */
+export async function generateApiKey(): Promise<{ plaintext: string; hash: string; prefix: string }> {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const body = btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+  const plaintext = `ak_${body}`;
+  const hash = await sha256Hex(plaintext);
+  const prefix = plaintext.slice(0, 11); // "ak_" + 8 chars
+  return { plaintext, hash, prefix };
+}
+
+export async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+interface ApiKeyRow {
+  id: string;
+  scopes: string;
+  provider: string | null;
+  expires_at: string | null;
+}
+
+async function lookupApiKey(db: D1Database, plaintext: string): Promise<ApiKeyContext | null> {
+  const hash = await sha256Hex(plaintext);
+  const row = await db.prepare(
+    "SELECT id, scopes, provider, expires_at FROM api_keys WHERE key_hash = ?"
+  ).bind(hash).first<ApiKeyRow>();
+
+  if (!row) return null;
+  if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) return null;
+
+  // 异步更新 last_used_at，不阻塞请求
+  db.prepare("UPDATE api_keys SET last_used_at = datetime('now') WHERE id = ?")
+    .bind(row.id).run().catch(() => {});
+
+  return {
+    id: row.id,
+    scopes: row.scopes.split(",").map((s) => s.trim()).filter(Boolean),
+    provider: row.provider,
+  };
+}
+
+/** Hono 中间件：验证 Authorization header（JWT 或 API key） */
 export function authMiddleware() {
-  return async (c: Context<{ Bindings: Env }>, next: Next) => {
+  return async (c: Context<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext } }>, next: Next) => {
     const authHeader = c.req.header("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return c.json({ error: "unauthorized" }, 401);
     }
 
     const token = authHeader.slice(7);
+
+    if (token.startsWith("ak_")) {
+      const key = await lookupApiKey(c.env.DB, token);
+      if (!key) return c.json({ error: "invalid or expired api key" }, 401);
+      c.set("apiKey", key);
+      await next();
+      return;
+    }
+
     const payload = await verifyToken(token, c.env.JWT_SECRET);
     if (!payload) {
       return c.json({ error: "invalid or expired token" }, 401);
     }
 
+    await next();
+  };
+}
+
+/** 要求 JWT（拒绝 API key），用于 key 管理等敏感操作 */
+export function requireJwt() {
+  return async (c: Context<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext } }>, next: Next) => {
+    if (c.get("apiKey")) {
+      return c.json({ error: "api keys cannot access this endpoint" }, 403);
+    }
+    await next();
+  };
+}
+
+/** 要求 API key 拥有指定 scope 之一（若为 JWT 则直接放行） */
+export function requireScope(...scopes: Scope[]) {
+  return async (c: Context<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext } }>, next: Next) => {
+    const key = c.get("apiKey");
+    if (!key) {
+      await next();
+      return;
+    }
+    if (key.scopes.includes("*")) {
+      await next();
+      return;
+    }
+    const ok = scopes.some((s) => key.scopes.includes(s));
+    if (!ok) {
+      return c.json({ error: `missing required scope: ${scopes.join(" or ")}` }, 403);
+    }
     await next();
   };
 }
