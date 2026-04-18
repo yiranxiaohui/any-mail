@@ -6,9 +6,11 @@
 
 - 域名邮箱实时接收（Cloudflare Email Worker）
 - Gmail / Outlook 邮箱自动同步（每分钟轮询）
-- 管理员登录认证（JWT）
-- 收件箱搜索、按账号筛选
-- 邮件详情支持 Text / HTML 视图切换
+- Outlook 批量导入（`账号----密码----client_id----refresh_token`）与 ROPC / PKCE 重授权
+- Cloudflare 域名一键同步为可用邮箱域
+- 收件箱搜索、按账号 / provider 筛选，邮件详情 Text / HTML 切换
+- 双模认证：管理员 JWT（后台）+ 带 scope 的 API key（外部程序接码）
+- 接码专用轮询接口 `GET /api/emails/latest`，服务端正则提取验证码
 - OAuth 凭据可在网页 Settings 中配置
 - GitHub Actions 自动部署
 
@@ -32,15 +34,20 @@
 ┌─────────────────────────────────────────────────────┐
 │          Cloudflare Worker (Hono API)                │
 │                                                     │
-│  POST /api/auth/login     登录获取 token              │
-│  GET  /api/emails         查询邮件列表                │
-│  GET  /api/emails/:id     查询邮件详情                │
-│  GET  /api/accounts       查看已绑定账号              │
-│  GET  /api/oauth/gmail    Gmail 授权                 │
-│  GET  /api/oauth/outlook  Outlook 授权               │
-│  GET  /api/settings       获取系统设置                │
-│  PUT  /api/settings       更新系统设置                │
-│  POST /api/sync           手动触发同步                │
+│  认证：Authorization: Bearer <JWT | ak_xxx>           │
+│                                                     │
+│  POST /api/auth/login     登录获取 JWT                │
+│  GET  /api/emails         邮件列表（scope: emails:read） │
+│  GET  /api/emails/latest  接码轮询 + 正则提取验证码       │
+│  POST /api/emails/send    通过 Resend 发邮件            │
+│  GET  /api/accounts       账号列表                      │
+│  POST /api/accounts       创建域名邮箱                  │
+│  POST /api/accounts/import 批量导入 Outlook            │
+│  GET  /api/domains        可用邮箱域（scope: domains:read）│
+│  GET  /api/keys           API key 管理（仅 JWT）        │
+│  POST /api/sync           触发同步（仅 JWT）            │
+│  /api/oauth/gmail|outlook OAuth 授权跳转                │
+│  GET|PUT /api/settings    系统设置（仅 JWT）            │
 └──────────────────────┬──────────────────────────────┘
                        │
                        ▼
@@ -155,6 +162,19 @@ bun run deploy
 4. 创建客户端密码
 5. API 权限添加 `Mail.Read`（委托权限）
 6. 在 AnyMail **Settings** 页面填入 Client ID 和 Client Secret
+
+## 外部程序接码
+
+如果你想让注册脚本 / 自动化测试通过 AnyMail 接收一次性验证码：
+
+1. 管理后台 `/api-keys` 创建一把 `provider=domain` + `emails:read` + `accounts:write` 的 API key
+2. 调用 `POST /api/accounts` 建临时邮箱
+3. 轮询 `GET /api/emails/latest?to=xxx&since=...&code_regex=\d{6}`
+4. 可选 `DELETE /api/accounts/:id` 回收
+
+完整对接文档（含 Python / Node / curl 代码样例、错误码、最佳实践）见 [`docs/code-reception.md`](docs/code-reception.md)。
+
+完整 API 参考见 [`docs/API.md`](docs/API.md)。
 
 ## 技术栈
 
