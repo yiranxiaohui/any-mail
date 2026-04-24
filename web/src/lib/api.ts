@@ -108,6 +108,18 @@ export function getAccountTags() {
   return request<{ tags: { tag: string | null; count: number }[] }>(`/api/accounts/tags`);
 }
 
+export function createTagGroup(name: string) {
+  return request<{ ok: boolean; name: string }>("/api/accounts/tags", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function deleteTagGroup(name: string) {
+  return request<{ ok: boolean }>(`/api/accounts/tags/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
 export function bulkTagAccounts(ids: string[], tag: string | null) {
   return request<{ ok: boolean; updated: number }>("/api/accounts/bulk-tag", {
     method: "POST",

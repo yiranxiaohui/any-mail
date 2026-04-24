@@ -61,24 +61,71 @@ accounts.get("/", requireScope("accounts:read"), async (c) => {
   return c.json({ accounts: rows, meta: { limit, offset, total } });
 });
 
-/** 列出所有已使用的标签及其账户数 */
+/** 列出所有分组（用户创建的 + 有账户占用的），以及每个分组的账户数 */
 accounts.get("/tags", requireScope("accounts:read"), async (c) => {
   const keyProvider = c.get("apiKey")?.provider ?? null;
 
-  let sql = "SELECT tag, COUNT(*) as count FROM accounts";
-  const params: string[] = [];
+  // 用户创建的空分组（tag_groups）与账户占用的 tag 做并集，用账户表统计数量
+  let countSql = "SELECT tag, COUNT(*) as count FROM accounts";
+  const countParams: string[] = [];
   if (keyProvider) {
-    sql += " WHERE provider = ?";
-    params.push(keyProvider);
+    countSql += " WHERE provider = ?";
+    countParams.push(keyProvider);
   }
-  sql += " GROUP BY tag ORDER BY tag";
+  countSql += " GROUP BY tag";
 
-  const rows = await c.env.DB.prepare(sql).bind(...params).all<{ tag: string | null; count: number }>();
-  const tags = (rows.results ?? []).map((r) => ({
-    tag: r.tag && r.tag.trim() ? r.tag : null,
-    count: r.count,
-  }));
+  const [countRows, groupRows] = await c.env.DB.batch([
+    c.env.DB.prepare(countSql).bind(...countParams),
+    c.env.DB.prepare("SELECT name FROM tag_groups ORDER BY name"),
+  ]);
+
+  const countMap = new Map<string, number>();
+  let untagged = 0;
+  for (const r of (countRows?.results ?? []) as { tag: string | null; count: number }[]) {
+    if (r.tag && r.tag.trim()) countMap.set(r.tag, r.count);
+    else untagged += r.count;
+  }
+  for (const r of (groupRows?.results ?? []) as { name: string }[]) {
+    if (!countMap.has(r.name)) countMap.set(r.name, 0);
+  }
+
+  const tags: { tag: string | null; count: number }[] = [];
+  if (untagged > 0) tags.push({ tag: null, count: untagged });
+  for (const [name, count] of Array.from(countMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+    tags.push({ tag: name, count });
+  }
   return c.json({ tags });
+});
+
+/** 创建一个空分组 */
+accounts.post("/tags", requireScope("accounts:write"), async (c) => {
+  const body = await c.req.json<{ name: string }>();
+  const name = body.name?.trim();
+  if (!name) return c.json({ error: "name required" }, 400);
+  if (name.length > 50) return c.json({ error: "name too long" }, 400);
+
+  try {
+    await c.env.DB.prepare("INSERT INTO tag_groups (name) VALUES (?)").bind(name).run();
+  } catch (err) {
+    // UNIQUE 冲突：分组已存在，直接返回 ok（幂等）
+    const msg = err instanceof Error ? err.message : "";
+    if (!/UNIQUE|constraint/i.test(msg)) {
+      return c.json({ error: msg || "failed to create group" }, 500);
+    }
+  }
+  return c.json({ ok: true, name });
+});
+
+/** 删除分组：从 tag_groups 移除并把落在该分组下的账户 tag 清空 */
+accounts.delete("/tags/:name", requireScope("accounts:write"), async (c) => {
+  const name = decodeURIComponent(c.req.param("name") ?? "").trim();
+  if (!name) return c.json({ error: "name required" }, 400);
+
+  await c.env.DB.batch([
+    c.env.DB.prepare("DELETE FROM tag_groups WHERE name = ?").bind(name),
+    c.env.DB.prepare("UPDATE accounts SET tag = NULL, updated_at = datetime('now') WHERE tag = ?").bind(name),
+  ]);
+  return c.json({ ok: true });
 });
 
 /** 查询单个账号 */
@@ -315,7 +362,7 @@ accounts.post("/:id/reauth", requireScope("accounts:write"), async (c) => {
   return c.json({ ok: true, email: account.email });
 });
 
-/** 批量设置标签 */
+/** 批量设置标签（支持顺便新建分组） */
 accounts.post("/bulk-tag", requireScope("accounts:write"), async (c) => {
   const body = await c.req.json<{ ids: string[]; tag: string | null }>();
   if (!Array.isArray(body.ids) || body.ids.length === 0) {
@@ -336,6 +383,16 @@ accounts.post("/bulk-tag", requireScope("accounts:write"), async (c) => {
   }
 
   const res = await c.env.DB.prepare(sql).bind(...values).run();
+
+  // 把目标分组也登记一下（若不存在），让它在 /tags 列表里稳定出现
+  if (tag) {
+    try {
+      await c.env.DB.prepare("INSERT OR IGNORE INTO tag_groups (name) VALUES (?)").bind(tag).run();
+    } catch {
+      // 忽略
+    }
+  }
+
   return c.json({ ok: true, updated: res.meta?.changes ?? 0 });
 });
 

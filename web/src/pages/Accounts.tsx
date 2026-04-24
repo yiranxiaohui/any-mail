@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getAccounts, getAccount, getEmails, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, getDomains, getAccountTags, bulkTagAccounts, gmailAuthUrl, outlookAuthUrl, type Account, type Email } from "@/lib/api";
+import { getAccounts, getAccount, getEmails, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, getDomains, getAccountTags, bulkTagAccounts, createTagGroup, deleteTagGroup, gmailAuthUrl, outlookAuthUrl, type Account, type Email } from "@/lib/api";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,7 +46,11 @@ export default function Accounts() {
   // Tags
   const [tagStats, setTagStats] = useState<{ tag: string | null; count: number }[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkTagValue, setBulkTagValue] = useState("");
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupAfterCreate, setNewGroupAfterCreate] = useState<"none" | "bulkMove" | "rowMove">("none");
+  const [rowMoveTarget, setRowMoveTarget] = useState<string | null>(null);
+  const [creatingGroup, setCreatingGroup] = useState(false);
 
   // Edit
   const [editAccount, setEditAccount] = useState<Account | null>(null);
@@ -237,19 +241,64 @@ export default function Accounts() {
     }
   };
 
-  const handleBulkTag = async () => {
+  const handleBulkTag = async (tag: string | null) => {
     if (selectedIds.size === 0) return;
-    const tag = bulkTagValue.trim() || null;
+    const count = selectedIds.size;
     try {
       await bulkTagAccounts(Array.from(selectedIds), tag);
-      toast.success(tag ? t("accounts.tags.bulkMoved", { tag, count: selectedIds.size }) : t("accounts.tags.bulkCleared", { count: selectedIds.size }));
+      toast.success(tag ? t("accounts.tags.bulkMoved", { tag, count }) : t("accounts.tags.bulkCleared", { count }));
       setSelectedIds(new Set());
-      setBulkTagValue("");
       fetchAccounts();
       fetchTags();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("settings.saveFailed"));
     }
+  };
+
+  const openNewGroupDialog = (after: "none" | "bulkMove" | "rowMove", rowId: string | null = null) => {
+    setNewGroupName("");
+    setNewGroupAfterCreate(after);
+    setRowMoveTarget(rowId);
+    setNewGroupOpen(true);
+  };
+
+  const handleCreateGroup = async () => {
+    const name = newGroupName.trim();
+    if (!name) return;
+    setCreatingGroup(true);
+    try {
+      await createTagGroup(name);
+      if (newGroupAfterCreate === "bulkMove") {
+        await handleBulkTag(name);
+      } else if (newGroupAfterCreate === "rowMove" && rowMoveTarget) {
+        await handleQuickTag(rowMoveTarget, name);
+      } else {
+        toast.success(t("accounts.tags.groupCreated", { name }));
+        fetchTags();
+      }
+      setNewGroupOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("accounts.tags.groupCreateFailed"));
+    } finally {
+      setCreatingGroup(false);
+    }
+  };
+
+  const handleDeleteGroup = async (name: string) => {
+    if (!confirm(t("accounts.tags.deleteGroupConfirm", { name }))) return;
+    try {
+      await deleteTagGroup(name);
+      if (filterTag === name) setFilterTag("");
+      toast.success(t("accounts.tags.groupDeleted", { name }));
+      fetchAccounts();
+      fetchTags();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.saveFailed"));
+    }
+  };
+
+  const selectAllVisible = () => {
+    setSelectedIds(new Set(accounts.map((a) => a.id)));
   };
 
   const toggleSelected = (id: string) => {
@@ -626,6 +675,41 @@ export default function Accounts() {
         </DialogContent>
       </Dialog>
 
+      {/* New Group Dialog */}
+      <Dialog open={newGroupOpen} onOpenChange={setNewGroupOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("accounts.tags.newGroupTitle")}</DialogTitle>
+            <DialogDescription>
+              {newGroupAfterCreate === "bulkMove"
+                ? t("accounts.tags.newGroupBulkDesc", { count: selectedIds.size })
+                : newGroupAfterCreate === "rowMove"
+                  ? t("accounts.tags.newGroupRowDesc")
+                  : t("accounts.tags.newGroupDesc")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              autoFocus
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreateGroup()}
+              placeholder={t("accounts.tags.placeholder")}
+              maxLength={50}
+            />
+            <Button className="w-full" onClick={handleCreateGroup} disabled={creatingGroup || !newGroupName.trim()}>
+              {creatingGroup
+                ? t("accounts.tags.creating")
+                : newGroupAfterCreate === "bulkMove"
+                  ? t("accounts.tags.createAndMove", { count: selectedIds.size })
+                  : newGroupAfterCreate === "rowMove"
+                    ? t("accounts.tags.createAndMoveOne")
+                    : t("accounts.tags.create")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Card className="flex flex-col min-h-0 flex-1">
         <CardHeader className="shrink-0">
           <div className="flex items-center justify-between">
@@ -661,6 +745,7 @@ export default function Accounts() {
                 onClick={() => { setFilterTag(tg.tag); setPage(1); }}
                 label={tg.tag}
                 count={tg.count}
+                onDelete={() => handleDeleteGroup(tg.tag)}
               />
             ))}
             <TagChip
@@ -669,36 +754,66 @@ export default function Accounts() {
               label={t("accounts.tags.untagged")}
               count={untaggedCount}
             />
+            <button
+              type="button"
+              onClick={() => openNewGroupDialog("none")}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-input px-3 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
+            >
+              + {t("accounts.tags.newGroup")}
+            </button>
           </div>
         </CardHeader>
         <Separator />
-        {selectedIds.size > 0 && (
-          <div className="flex items-center gap-2 border-b bg-muted/40 px-6 py-2">
-            <span className="text-sm text-muted-foreground">
-              {t("accounts.tags.selected", { count: selectedIds.size })}
-            </span>
-            <Input
-              value={bulkTagValue}
-              onChange={(e) => setBulkTagValue(e.target.value)}
-              placeholder={t("accounts.tags.bulkPlaceholder")}
-              className="h-8 w-48"
-              onKeyDown={(e) => e.key === "Enter" && handleBulkTag()}
-              list="account-tag-suggestions"
+        {accounts.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b bg-muted/20 px-6 py-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 cursor-pointer accent-primary"
+              checked={selectedIds.size > 0 && accounts.every((a) => selectedIds.has(a.id))}
+              ref={(el) => {
+                if (el) {
+                  const partial = selectedIds.size > 0 && !accounts.every((a) => selectedIds.has(a.id));
+                  el.indeterminate = partial;
+                }
+              }}
+              onChange={(e) => {
+                if (e.target.checked) selectAllVisible();
+                else setSelectedIds(new Set());
+              }}
             />
-            <Button size="sm" onClick={handleBulkTag}>
-              {t("accounts.tags.apply")}
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => { setBulkTagValue(""); handleBulkTag(); }}>
-              {t("accounts.tags.clear")}
-            </Button>
+            <span className="text-xs text-muted-foreground">
+              {selectedIds.size > 0
+                ? t("accounts.tags.selected", { count: selectedIds.size })
+                : t("accounts.tags.selectAllHint")}
+            </span>
+          </div>
+        )}
+        {selectedIds.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-6 py-2">
+            <span className="text-sm font-medium">
+              {t("accounts.tags.bulkActions")}
+            </span>
+            <select
+              value=""
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "__new__") openNewGroupDialog("bulkMove");
+                else if (v === "__clear__") handleBulkTag(null);
+                else if (v) handleBulkTag(v);
+                e.currentTarget.value = "";
+              }}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option value="">{t("accounts.tags.moveTo")}</option>
+              {tagList.map((tg) => (
+                <option key={tg.tag} value={tg.tag}>{tg.tag} ({tg.count})</option>
+              ))}
+              <option value="__new__">{t("accounts.tags.newGroupOption")}</option>
+              <option value="__clear__">{t("accounts.tags.removeTag")}</option>
+            </select>
             <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
               {t("accounts.tags.deselect")}
             </Button>
-            <datalist id="account-tag-suggestions">
-              {tagList.map((tg) => (
-                <option key={tg.tag} value={tg.tag} />
-              ))}
-            </datalist>
           </div>
         )}
         {loading ? (
@@ -767,8 +882,7 @@ export default function Accounts() {
                     onChange={(e) => {
                       const v = e.target.value;
                       if (v === "__new__") {
-                        const input = prompt(t("accounts.tags.promptNew"));
-                        if (input && input.trim()) handleQuickTag(account.id, input.trim());
+                        openNewGroupDialog("rowMove", account.id);
                       } else if (v === "__clear__") {
                         handleQuickTag(account.id, null);
                       } else if (v) {
@@ -782,7 +896,7 @@ export default function Accounts() {
                     {tagList.filter((tg) => tg.tag !== account.tag).map((tg) => (
                       <option key={tg.tag} value={tg.tag}>{tg.tag}</option>
                     ))}
-                    <option value="__new__">{t("accounts.tags.newTag")}</option>
+                    <option value="__new__">{t("accounts.tags.newGroupOption")}</option>
                     {account.tag && <option value="__clear__">{t("accounts.tags.removeTag")}</option>}
                   </select>
                   <Button
@@ -844,11 +958,9 @@ export default function Accounts() {
   );
 }
 
-function TagChip({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: string; count: number }) {
+function TagChip({ active, onClick, label, count, onDelete }: { active: boolean; onClick: () => void; label: string; count: number; onDelete?: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
       className={
         "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors " +
         (active
@@ -856,9 +968,21 @@ function TagChip({ active, onClick, label, count }: { active: boolean; onClick: 
           : "border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground")
       }
     >
-      {label}
-      <span className={active ? "text-primary-foreground/80" : "text-muted-foreground/60"}>{count}</span>
-    </button>
+      <button type="button" onClick={onClick} className="inline-flex items-center gap-1.5">
+        {label}
+        <span className={active ? "text-primary-foreground/80" : "text-muted-foreground/60"}>{count}</span>
+      </button>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className={"ml-0.5 opacity-60 hover:opacity-100 " + (active ? "hover:text-white" : "hover:text-destructive")}
+          title="Delete group"
+        >
+          ×
+        </button>
+      )}
+    </div>
   );
 }
 
