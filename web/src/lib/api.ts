@@ -7,6 +7,7 @@ export interface Account {
   provider: "domain" | "gmail" | "outlook";
   email: string;
   expires_at: string | null;
+  tag: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -90,16 +91,29 @@ export function sendEmail(data: { from: string; to: string; subject: string; tex
 }
 
 // Accounts
-export function getAccounts(params?: { search?: string; provider?: string; limit?: number; offset?: number }) {
+export function getAccounts(params?: { search?: string; provider?: string; tag?: string; limit?: number; offset?: number }) {
   const q = new URLSearchParams();
   if (params?.search) q.set("search", params.search);
   if (params?.provider) q.set("provider", params.provider);
+  if (params?.tag !== undefined) q.set("tag", params.tag);
   if (params?.limit) q.set("limit", String(params.limit));
   if (params?.offset) q.set("offset", String(params.offset));
   const qs = q.toString();
   return request<{ accounts: Account[]; meta: { limit: number; offset: number; total: number } }>(
     `/api/accounts${qs ? `?${qs}` : ""}`
   );
+}
+
+export function getAccountTags() {
+  return request<{ tags: { tag: string | null; count: number }[] }>(`/api/accounts/tags`);
+}
+
+export function bulkTagAccounts(ids: string[], tag: string | null) {
+  return request<{ ok: boolean; updated: number }>("/api/accounts/bulk-tag", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids, tag }),
+  });
 }
 
 export function getAccount(id: string) {
@@ -122,7 +136,7 @@ export function importAccounts(text: string) {
   });
 }
 
-export function updateAccount(id: string, data: { email?: string; password?: string | null; expires_at?: string | null; client_id?: string | null; refresh_token?: string | null }) {
+export function updateAccount(id: string, data: { email?: string; password?: string | null; expires_at?: string | null; client_id?: string | null; refresh_token?: string | null; tag?: string | null }) {
   return request<{ ok: boolean }>(`/api/accounts/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },

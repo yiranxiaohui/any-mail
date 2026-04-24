@@ -265,8 +265,9 @@ export async function syncOutlookEmails(account: Account, creds: OAuthCredential
     const isHtml = msg.body?.contentType === "html";
 
     await db.prepare(
+      // datetime(?) 把 Graph 返回的 ISO "YYYY-MM-DDTHH:MM:SSZ" 归一成 "YYYY-MM-DD HH:MM:SS"（UTC），与 domain/gmail 一致，保证排序和展示可比
       `INSERT OR IGNORE INTO emails (id, account_id, message_id, provider, from_address, to_address, subject, text_body, html_body, raw_headers, received_at)
-       VALUES (?, ?, ?, 'outlook', ?, ?, ?, ?, ?, '{}', ?)`
+       VALUES (?, ?, ?, 'outlook', ?, ?, ?, ?, ?, '{}', datetime(?))`
     )
       .bind(
         crypto.randomUUID(),

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getAccounts, getAccount, getEmails, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, getDomains, gmailAuthUrl, outlookAuthUrl, type Account, type Email } from "@/lib/api";
+import { getAccounts, getAccount, getEmails, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, getDomains, getAccountTags, bulkTagAccounts, gmailAuthUrl, outlookAuthUrl, type Account, type Email } from "@/lib/api";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,9 +37,16 @@ export default function Accounts() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterProvider, setFilterProvider] = useState("");
+  // "" = all, "__untagged__" = 未分组, 其它 = 具体 tag
+  const [filterTag, setFilterTag] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
+
+  // Tags
+  const [tagStats, setTagStats] = useState<{ tag: string | null; count: number }[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkTagValue, setBulkTagValue] = useState("");
 
   // Edit
   const [editAccount, setEditAccount] = useState<Account | null>(null);
@@ -48,19 +55,35 @@ export default function Accounts() {
   const [editClientId, setEditClientId] = useState("");
   const [editRefreshToken, setEditRefreshToken] = useState("");
   const [editExpiry, setEditExpiry] = useState("");
+  const [editTag, setEditTag] = useState("");
   const [saving, setSaving] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [reauthing, setReauthing] = useState(false);
 
-  const fetchAccounts = async (s = debouncedSearch, prov = filterProvider, p = page, ps = pageSize) => {
+  const fetchAccounts = async (s = debouncedSearch, prov = filterProvider, tag = filterTag, p = page, ps = pageSize) => {
     setLoading(true);
     try {
-      const data = await getAccounts({ search: s || undefined, provider: prov || undefined, limit: ps, offset: (p - 1) * ps });
+      const data = await getAccounts({
+        search: s || undefined,
+        provider: prov || undefined,
+        tag: tag || undefined,
+        limit: ps,
+        offset: (p - 1) * ps,
+      });
       setAccounts(data.accounts);
       setTotal(data.meta.total);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTags = async () => {
+    try {
+      const data = await getAccountTags();
+      setTagStats(data.tags);
+    } catch {
+      // silent
     }
   };
 
@@ -88,8 +111,13 @@ export default function Accounts() {
   }, [search]);
 
   useEffect(() => {
-    fetchAccounts(debouncedSearch, filterProvider, page, pageSize);
-  }, [debouncedSearch, filterProvider, page, pageSize]);
+    fetchAccounts(debouncedSearch, filterProvider, filterTag, page, pageSize);
+    setSelectedIds(new Set());
+  }, [debouncedSearch, filterProvider, filterTag, page, pageSize]);
+
+  useEffect(() => {
+    fetchTags();
+  }, []);
 
   const getExpiresAt = (): string | null => {
     if (expiry === "permanent") return null;
@@ -152,12 +180,14 @@ export default function Accounts() {
     await deleteAccount(id);
     setAccounts((prev) => prev.filter((a) => a.id !== id));
     toast.success(t("accounts.removed", { email }));
+    fetchTags();
   };
 
   const openEdit = async (account: Account) => {
     setEditAccount(account);
     setEditEmail(account.email);
     setEditExpiry(account.expires_at ?? "");
+    setEditTag(account.tag ?? "");
     setEditPassword("");
     setShowPassword(false);
     setEditClientId("");
@@ -183,16 +213,57 @@ export default function Accounts() {
         expires_at: editExpiry || null,
         client_id: editClientId || null,
         refresh_token: editRefreshToken || null,
+        tag: editTag.trim() || null,
       });
       toast.success(t("settings.saved"));
       setEditAccount(null);
       fetchAccounts();
+      fetchTags();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("settings.saveFailed"));
     } finally {
       setSaving(false);
     }
   };
+
+  const handleQuickTag = async (id: string, tag: string | null) => {
+    try {
+      await updateAccount(id, { tag });
+      toast.success(tag ? t("accounts.tags.moved", { tag }) : t("accounts.tags.cleared"));
+      fetchAccounts();
+      fetchTags();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.saveFailed"));
+    }
+  };
+
+  const handleBulkTag = async () => {
+    if (selectedIds.size === 0) return;
+    const tag = bulkTagValue.trim() || null;
+    try {
+      await bulkTagAccounts(Array.from(selectedIds), tag);
+      toast.success(tag ? t("accounts.tags.bulkMoved", { tag, count: selectedIds.size }) : t("accounts.tags.bulkCleared", { count: selectedIds.size }));
+      setSelectedIds(new Set());
+      setBulkTagValue("");
+      fetchAccounts();
+      fetchTags();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.saveFailed"));
+    }
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const tagList = tagStats.filter((t) => t.tag !== null) as { tag: string; count: number }[];
+  const untaggedCount = tagStats.find((t) => t.tag === null)?.count ?? 0;
+  const totalAll = tagStats.reduce((acc, t) => acc + t.count, 0);
 
   const importLineCount = importText.trim() ? importText.trim().split("\n").filter((l) => l.trim()).length : 0;
 
@@ -524,6 +595,21 @@ export default function Accounts() {
                 </>
               )}
               <div className="space-y-1.5">
+                <label className="text-sm font-medium">{t("accounts.editFields.tag")}</label>
+                <Input
+                  value={editTag}
+                  onChange={(e) => setEditTag(e.target.value)}
+                  placeholder={t("accounts.tags.placeholder")}
+                  list="account-tag-suggestions-edit"
+                />
+                <datalist id="account-tag-suggestions-edit">
+                  {tagList.map((tg) => (
+                    <option key={tg.tag} value={tg.tag} />
+                  ))}
+                </datalist>
+                <p className="text-xs text-muted-foreground">{t("accounts.tags.hint")}</p>
+              </div>
+              <div className="space-y-1.5">
                 <label className="text-sm font-medium">{t("accounts.editFields.expiresAt")}</label>
                 <Input
                   type="datetime-local"
@@ -566,8 +652,55 @@ export default function Accounts() {
               />
             </div>
           </div>
+          <div className="flex items-center gap-2 overflow-x-auto pt-3">
+            <TagChip active={filterTag === ""} onClick={() => { setFilterTag(""); setPage(1); }} label={t("accounts.tags.all")} count={totalAll} />
+            {tagList.map((tg) => (
+              <TagChip
+                key={tg.tag}
+                active={filterTag === tg.tag}
+                onClick={() => { setFilterTag(tg.tag); setPage(1); }}
+                label={tg.tag}
+                count={tg.count}
+              />
+            ))}
+            <TagChip
+              active={filterTag === "__untagged__"}
+              onClick={() => { setFilterTag("__untagged__"); setPage(1); }}
+              label={t("accounts.tags.untagged")}
+              count={untaggedCount}
+            />
+          </div>
         </CardHeader>
         <Separator />
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2 border-b bg-muted/40 px-6 py-2">
+            <span className="text-sm text-muted-foreground">
+              {t("accounts.tags.selected", { count: selectedIds.size })}
+            </span>
+            <Input
+              value={bulkTagValue}
+              onChange={(e) => setBulkTagValue(e.target.value)}
+              placeholder={t("accounts.tags.bulkPlaceholder")}
+              className="h-8 w-48"
+              onKeyDown={(e) => e.key === "Enter" && handleBulkTag()}
+              list="account-tag-suggestions"
+            />
+            <Button size="sm" onClick={handleBulkTag}>
+              {t("accounts.tags.apply")}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => { setBulkTagValue(""); handleBulkTag(); }}>
+              {t("accounts.tags.clear")}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+              {t("accounts.tags.deselect")}
+            </Button>
+            <datalist id="account-tag-suggestions">
+              {tagList.map((tg) => (
+                <option key={tg.tag} value={tg.tag} />
+              ))}
+            </datalist>
+          </div>
+        )}
         {loading ? (
           <CardContent className="flex items-center justify-center py-12 text-muted-foreground">
             <svg className="mr-2 h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -591,6 +724,12 @@ export default function Accounts() {
             {accounts.map((account) => (
               <div key={account.id} className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 cursor-pointer accent-primary"
+                    checked={selectedIds.has(account.id)}
+                    onChange={() => toggleSelected(account.id)}
+                  />
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
                     <ProviderIcon provider={account.provider} />
                   </div>
@@ -598,6 +737,19 @@ export default function Accounts() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{account.email}</span>
                       <ProviderBadge provider={account.provider} />
+                      {account.tag && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                          {account.tag}
+                          <button
+                            type="button"
+                            className="opacity-60 hover:opacity-100"
+                            title={t("accounts.tags.remove")}
+                            onClick={() => handleQuickTag(account.id, null)}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      )}
                     </div>
                     <span className="text-xs text-muted-foreground">
                       {t("accounts.connected", { date: new Date(account.created_at).toLocaleDateString() })}
@@ -609,7 +761,30 @@ export default function Accounts() {
                     </span>
                   </div>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex items-center gap-1">
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "__new__") {
+                        const input = prompt(t("accounts.tags.promptNew"));
+                        if (input && input.trim()) handleQuickTag(account.id, input.trim());
+                      } else if (v === "__clear__") {
+                        handleQuickTag(account.id, null);
+                      } else if (v) {
+                        handleQuickTag(account.id, v);
+                      }
+                      e.currentTarget.value = "";
+                    }}
+                    className="rounded-md border border-input bg-background px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <option value="">{t("accounts.tags.moveTo")}</option>
+                    {tagList.filter((tg) => tg.tag !== account.tag).map((tg) => (
+                      <option key={tg.tag} value={tg.tag}>{tg.tag}</option>
+                    ))}
+                    <option value="__new__">{t("accounts.tags.newTag")}</option>
+                    {account.tag && <option value="__clear__">{t("accounts.tags.removeTag")}</option>}
+                  </select>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -666,6 +841,24 @@ export default function Accounts() {
         </div>
       </Card>
     </div>
+  );
+}
+
+function TagChip({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: string; count: number }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors " +
+        (active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground")
+      }
+    >
+      {label}
+      <span className={active ? "text-primary-foreground/80" : "text-muted-foreground/60"}>{count}</span>
+    </button>
   );
 }
 

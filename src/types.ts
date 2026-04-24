@@ -21,6 +21,7 @@ export interface Account {
   token_expires_at: number | null;
   last_sync_history_id: string | null;
   expires_at: string | null;
+  tag?: string | null;
   created_at: string;
   updated_at: string;
 }

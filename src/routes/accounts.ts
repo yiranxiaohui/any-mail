@@ -8,13 +8,14 @@ const accounts = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext }
 accounts.get("/", requireScope("accounts:read"), async (c) => {
   const search = c.req.query("search");
   const providerQuery = c.req.query("provider");
+  const tagQuery = c.req.query("tag");
   const limit = Math.min(parseInt(c.req.query("limit") ?? "20"), 100);
   const offset = parseInt(c.req.query("offset") ?? "0");
 
   const keyProvider = c.get("apiKey")?.provider ?? null;
   const provider = keyProvider ?? providerQuery;
 
-  let sql = "SELECT id, provider, email, expires_at, created_at, updated_at FROM accounts";
+  let sql = "SELECT id, provider, email, expires_at, tag, created_at, updated_at FROM accounts";
   let countSql = "SELECT COUNT(*) as total FROM accounts";
   const params: string[] = [];
   const countParams: string[] = [];
@@ -29,6 +30,16 @@ accounts.get("/", requireScope("accounts:read"), async (c) => {
     conditions.push("provider = ?");
     params.push(provider);
     countParams.push(provider);
+  }
+  if (tagQuery !== undefined) {
+    // tag=__untagged__ 过滤未分组；其余按字符串完全匹配
+    if (tagQuery === "__untagged__") {
+      conditions.push("(tag IS NULL OR tag = '')");
+    } else if (tagQuery) {
+      conditions.push("tag = ?");
+      params.push(tagQuery);
+      countParams.push(tagQuery);
+    }
   }
   if (conditions.length > 0) {
     const where = " WHERE " + conditions.join(" AND ");
@@ -50,12 +61,32 @@ accounts.get("/", requireScope("accounts:read"), async (c) => {
   return c.json({ accounts: rows, meta: { limit, offset, total } });
 });
 
+/** 列出所有已使用的标签及其账户数 */
+accounts.get("/tags", requireScope("accounts:read"), async (c) => {
+  const keyProvider = c.get("apiKey")?.provider ?? null;
+
+  let sql = "SELECT tag, COUNT(*) as count FROM accounts";
+  const params: string[] = [];
+  if (keyProvider) {
+    sql += " WHERE provider = ?";
+    params.push(keyProvider);
+  }
+  sql += " GROUP BY tag ORDER BY tag";
+
+  const rows = await c.env.DB.prepare(sql).bind(...params).all<{ tag: string | null; count: number }>();
+  const tags = (rows.results ?? []).map((r) => ({
+    tag: r.tag && r.tag.trim() ? r.tag : null,
+    count: r.count,
+  }));
+  return c.json({ tags });
+});
+
 /** 查询单个账号 */
 accounts.get("/:id", requireScope("accounts:read"), async (c) => {
   const id = c.req.param("id");
   const keyProvider = c.get("apiKey")?.provider ?? null;
   const account = await c.env.DB.prepare(
-    "SELECT id, provider, email, password, client_id, refresh_token, expires_at, created_at, updated_at FROM accounts WHERE id = ?"
+    "SELECT id, provider, email, password, client_id, refresh_token, expires_at, tag, created_at, updated_at FROM accounts WHERE id = ?"
   )
     .bind(id)
     .first<{ provider: string }>();
@@ -187,7 +218,7 @@ accounts.patch("/:id", requireScope("accounts:write"), async (c) => {
   const guard = await assertKeyProviderMatches(c, id);
   if (guard) return guard;
 
-  const body = await c.req.json<{ email?: string; password?: string | null; expires_at?: string | null; client_id?: string | null; refresh_token?: string | null }>();
+  const body = await c.req.json<{ email?: string; password?: string | null; expires_at?: string | null; client_id?: string | null; refresh_token?: string | null; tag?: string | null }>();
 
   const fields: string[] = [];
   const values: (string | null)[] = [];
@@ -211,6 +242,11 @@ accounts.patch("/:id", requireScope("accounts:write"), async (c) => {
   if (body.refresh_token !== undefined) {
     fields.push("refresh_token = ?");
     values.push(body.refresh_token);
+  }
+  if (body.tag !== undefined) {
+    fields.push("tag = ?");
+    const normalized = typeof body.tag === "string" ? body.tag.trim() : body.tag;
+    values.push(normalized ? normalized : null);
   }
 
   if (fields.length === 0) {
@@ -277,6 +313,30 @@ accounts.post("/:id/reauth", requireScope("accounts:write"), async (c) => {
   ).bind(token.access_token, token.refresh_token ?? "", expiresAt, id).run();
 
   return c.json({ ok: true, email: account.email });
+});
+
+/** 批量设置标签 */
+accounts.post("/bulk-tag", requireScope("accounts:write"), async (c) => {
+  const body = await c.req.json<{ ids: string[]; tag: string | null }>();
+  if (!Array.isArray(body.ids) || body.ids.length === 0) {
+    return c.json({ error: "ids required" }, 400);
+  }
+  const normalized = typeof body.tag === "string" ? body.tag.trim() : body.tag;
+  const tag = normalized ? normalized : null;
+
+  const key = c.get("apiKey");
+  const keyProvider = key?.provider ?? null;
+
+  const placeholders = body.ids.map(() => "?").join(",");
+  let sql = `UPDATE accounts SET tag = ?, updated_at = datetime('now') WHERE id IN (${placeholders})`;
+  const values: (string | null)[] = [tag, ...body.ids];
+  if (keyProvider) {
+    sql += " AND provider = ?";
+    values.push(keyProvider);
+  }
+
+  const res = await c.env.DB.prepare(sql).bind(...values).run();
+  return c.json({ ok: true, updated: res.meta?.changes ?? 0 });
 });
 
 /** 删除账号及其所有邮件 */

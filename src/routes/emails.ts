@@ -40,7 +40,8 @@ emails.get("/", requireScope("emails:read"), async (c) => {
     countParams.push(`%${to}%`);
   }
 
-  sql += " ORDER BY received_at DESC LIMIT ? OFFSET ?";
+  // 用 datetime() 归一化不同 provider 的时间戳格式（outlook 存 ISO，domain/gmail 存空格分隔），否则字节序会错排
+  sql += " ORDER BY datetime(received_at) DESC LIMIT ? OFFSET ?";
   params.push(String(limit), String(offset));
 
   const batchResults = await c.env.DB.batch([
@@ -71,14 +72,14 @@ emails.get("/latest", requireScope("emails:read"), async (c) => {
     params.push(`%${to}%`);
   }
   if (since) {
-    sql += " AND received_at > ?";
+    sql += " AND datetime(received_at) > datetime(?)";
     params.push(since);
   }
   if (keyProvider) {
     sql += " AND provider = ?";
     params.push(keyProvider);
   }
-  sql += " ORDER BY received_at DESC LIMIT ?";
+  sql += " ORDER BY datetime(received_at) DESC LIMIT ?";
   params.push(String(limit));
 
   const rows = await c.env.DB.prepare(sql).bind(...params).all();
