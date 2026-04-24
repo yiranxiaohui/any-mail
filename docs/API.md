@@ -269,6 +269,7 @@ List connected accounts with optional filtering and pagination.
 |-------|------|---------|-------------|
 | `search` | string | — | LIKE match on email |
 | `provider` | string | — | Filter by provider (`domain`, `gmail`, `outlook`) |
+| `tag` | string | — | Filter by tag (exact match). Special value `__untagged__` returns accounts with no tag. Omit to return all. |
 | `limit` | integer | 20 | Max 100 |
 | `offset` | integer | 0 | Pagination offset |
 
@@ -282,12 +283,117 @@ List connected accounts with optional filtering and pagination.
       "provider": "domain|gmail|outlook",
       "email": "user@example.com",
       "expires_at": "2026-01-01T00:00:00.000Z|null",
+      "tag": "service-a|null",
       "created_at": "2026-01-01T00:00:00.000Z",
       "updated_at": "2026-01-01T00:00:00.000Z"
     }
   ],
   "meta": { "limit": 20, "offset": 0, "total": 42 }
 }
+```
+
+#### `GET /api/accounts/tags`
+
+List all tag groups with account counts. Combines user-created empty groups (`tag_groups` table) and tags actually in use on accounts. If the API key is bound to a provider, counts only include that provider.
+
+**Required scope:** `accounts:read`
+
+**Response:**
+
+```json
+{
+  "tags": [
+    { "tag": null, "count": 5 },
+    { "tag": "service-a", "count": 12 },
+    { "tag": "service-b", "count": 0 }
+  ]
+}
+```
+
+The `tag: null` entry (if present) represents untagged accounts. Other entries are sorted alphabetically. Groups with `count: 0` are user-created empty groups still registered in `tag_groups`.
+
+#### `POST /api/accounts/tags`
+
+Create an empty tag group. Idempotent — re-creating an existing group returns success without error.
+
+**Required scope:** `accounts:write`
+
+**Request Body:**
+
+```json
+{ "name": "service-a" }
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Group name, 1–50 chars (trimmed) |
+
+**Response (200):**
+
+```json
+{ "ok": true, "name": "service-a" }
+```
+
+**Response (400):**
+
+```json
+{ "error": "name required" }
+```
+
+```json
+{ "error": "name too long" }
+```
+
+#### `DELETE /api/accounts/tags/:name`
+
+Delete a tag group. Removes the group from `tag_groups` and clears the `tag` field on any accounts currently assigned to it (accounts themselves are **not** deleted).
+
+**Required scope:** `accounts:write`
+
+**Response (200):**
+
+```json
+{ "ok": true }
+```
+
+**Response (400):**
+
+```json
+{ "error": "name required" }
+```
+
+#### `POST /api/accounts/bulk-tag`
+
+Bulk-assign or clear a tag on multiple accounts. If the target tag doesn't exist as a group yet, it's auto-registered in `tag_groups` so it appears stably in `GET /api/accounts/tags`.
+
+**Required scope:** `accounts:write`
+
+**Request Body:**
+
+```json
+{
+  "ids": ["uuid1", "uuid2", "uuid3"],
+  "tag": "service-a"
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `ids` | Yes | Non-empty array of account IDs |
+| `tag` | Yes | Tag name, or `null` to clear the tag on all listed accounts |
+
+If the API key is bound to a provider, only accounts of that provider are affected (others silently skipped).
+
+**Response (200):**
+
+```json
+{ "ok": true, "updated": 3 }
+```
+
+**Response (400):**
+
+```json
+{ "error": "ids required" }
 ```
 
 #### `GET /api/accounts/:id`
@@ -305,6 +411,7 @@ Get a single account. Includes sensitive fields (`password`, `client_id`, `refre
   "client_id": "string|null",
   "refresh_token": "string|null",
   "expires_at": "2026-01-01T00:00:00.000Z|null",
+  "tag": "service-a|null",
   "created_at": "2026-01-01T00:00:00.000Z",
   "updated_at": "2026-01-01T00:00:00.000Z"
 }
@@ -427,11 +534,12 @@ Update editable account fields. Only fields present in the request body are modi
   "password": "new-password",
   "expires_at": "2026-06-01T00:00:00.000Z",
   "client_id": "client-id",
-  "refresh_token": "refresh-token"
+  "refresh_token": "refresh-token",
+  "tag": "service-a"
 }
 ```
 
-Nullable fields (`password`, `expires_at`, `client_id`, `refresh_token`) accept `null` to clear the value.
+Nullable fields (`password`, `expires_at`, `client_id`, `refresh_token`, `tag`) accept `null` to clear the value. Setting `tag` to an empty string also clears it.
 
 **Response (200):**
 
@@ -915,6 +1023,10 @@ Manually trigger email sync for all Gmail and Outlook accounts.
 | POST | `/api/emails/send` | Yes | Send email via Resend (scope: `emails:send`) |
 | DELETE | `/api/emails/:id` | Yes | Delete email (scope: `emails:delete`) |
 | GET | `/api/accounts` | Yes | List accounts (scope: `accounts:read`) |
+| GET | `/api/accounts/tags` | Yes | List tag groups with counts (scope: `accounts:read`) |
+| POST | `/api/accounts/tags` | Yes | Create empty tag group (scope: `accounts:write`) |
+| DELETE | `/api/accounts/tags/:name` | Yes | Delete tag group, clear on accounts (scope: `accounts:write`) |
+| POST | `/api/accounts/bulk-tag` | Yes | Bulk set/clear tag on accounts (scope: `accounts:write`) |
 | GET | `/api/accounts/:id` | Yes | Get account detail (scope: `accounts:read`) |
 | POST | `/api/accounts` | Yes | Create domain email (scope: `accounts:write`, provider=domain) |
 | POST | `/api/accounts/import` | Yes | Bulk import Outlook accounts (scope: `accounts:write`, provider=outlook) |

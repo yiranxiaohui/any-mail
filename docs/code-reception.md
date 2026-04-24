@@ -218,6 +218,45 @@ curl -X DELETE https://your-anymail.example.com/api/accounts/8f3e2a... \
 
 同时删除该账号名下所有邮件。不主动删也没问题 —— `expires_at` 仅用于前端标记,**后端不会自动删除过期账号或其邮件**。若需要清理,自行调用本接口或在后台页面操作。
 
+### 5.4 给邮箱打标签(可选,推荐多服务场景使用)
+
+所有账号都有一个 `tag` 字段,用于分组。接码脚本同时服务多个业务时,强烈建议按业务名给每个邮箱打上 tag —— 后续查询、批量清理都能按 tag 过滤,避免不同业务的邮箱混在一起。
+
+**建邮箱后单独打标签**:
+
+```bash
+curl -X PATCH https://your-anymail.example.com/api/accounts/8f3e2a... \
+  -H "Authorization: Bearer ak_xxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{"tag": "service-a"}'
+```
+
+**批量打标签**(一次最多到 D1 参数上限,通常几百个没问题):
+
+**`POST /api/accounts/bulk-tag`** · scope: `accounts:write`
+
+```bash
+curl -X POST https://your-anymail.example.com/api/accounts/bulk-tag \
+  -H "Authorization: Bearer ak_xxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{"ids": ["id1", "id2", "id3"], "tag": "service-a"}'
+```
+
+传 `"tag": null` 可清除分组。返回 `{ "ok": true, "updated": 3 }`。
+
+**按 tag 列出邮箱**:
+
+```bash
+curl -G https://your-anymail.example.com/api/accounts \
+  -H "Authorization: Bearer ak_xxxxx" \
+  --data-urlencode "tag=service-a" \
+  --data-urlencode "limit=100"
+```
+
+`tag=__untagged__` 可以单独过滤出未分组的邮箱。配合 `DELETE /api/accounts/:id` 就能做定期清理。
+
+> 账号创建接口(`POST /api/accounts`)目前不接受 `tag` 字段,打标签请用 `PATCH` 或 `bulk-tag`。
+
 ---
 
 ## 6. 代码示例
@@ -382,6 +421,7 @@ done
 6. **key 泄露应急**:管理后台 `/api-keys` → 撤销,立即失效。
 7. **不要把 key 写进前端代码 / Git 仓库**。CI 用环境变量、秘密管理服务(GitHub Actions Secrets、AWS Secrets Manager 等)。
 8. **速率控制**: 单 key 的轮询 QPS 建议 ≤ 1 req/s。虽然现在没加限流,将来可能加。
+9. **多业务用 `tag` 分组**。同一把 key 给多个业务收码时,按业务名给邮箱打 tag(见 5.4),后续按 tag 批量清理更安全,也不怕误删别的业务的邮箱。
 
 ---
 
@@ -398,6 +438,9 @@ A: 目前不自动清理。`expires_at` 过期也只是标记,邮件仍保留。
 
 **Q: 能否用一把 key 管理多个域?**
 A: 可以。`EMAIL_DOMAINS` 是全局的,一个 `provider=domain` 的 key 能跨所有已配置的域创建/读取邮箱。
+
+**Q: 同一把 key 同时给多个业务收码,怎么避免清理时误删?**
+A: 用 `tag` 给每个邮箱打上业务名(见 5.4),清理时 `GET /api/accounts?tag=service-a` 先拉出属于该业务的邮箱 id,再逐个 `DELETE`。或者按 `tag=__untagged__` 清理遗留的未分组邮箱。
 
 **Q: Gmail / Outlook 邮箱能接码吗?**
 A: 理论可以,但当前 API key 创建接口只放行 `provider=domain`。Gmail/Outlook 仍需先通过后台 OAuth 连接账号,然后给一把 `provider=gmail` / `outlook` + `emails:read` 的 key 去读。但轮询频率受限于各家 API 的配额,接码场景下体验不如域名邮箱。
