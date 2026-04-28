@@ -157,8 +157,17 @@ emails.post("/send", requireScope("emails:send"), async (c) => {
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    return c.json({ error: `Resend error: ${err}` }, 500);
+    const errText = await res.text();
+    let errMessage = errText;
+    try {
+      const parsed = JSON.parse(errText) as { message?: string; name?: string };
+      if (parsed.message) errMessage = parsed.message;
+    } catch {
+      // 非 JSON，原样返回
+    }
+    // Resend 的 4xx（域名未验证、key 错、参数非法）按 4xx 透传，仅 5xx 才算服务端故障
+    const status = res.status >= 400 && res.status < 500 ? res.status : 502;
+    return c.json({ error: `Resend: ${errMessage}`, status: res.status }, status as 400 | 401 | 403 | 422 | 502);
   }
 
   const result = await res.json<{ id: string }>();
