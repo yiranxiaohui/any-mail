@@ -6,6 +6,7 @@
     "inbox": "收件箱",
     "compose": "写邮件",
     "accounts": "账户",
+    "groups": "分组",
     "apiKeys": "API 密钥",
     "settings": "设置",
     "logout": "退出登录"
@@ -176,6 +177,43 @@
       "importing": "导入中...",
       "importResult": "成功导入 {{success}}/{{total}} 个账户",
       "importFailed": "导入失败"
+    }
+  },
+  "groups": {
+    "title": "分组管理",
+    "description": "集中管理账户分组：新建、重命名、删除，或快速跳转到对应账户列表。",
+    "new": "新建分组",
+    "newTitle": "新建分组",
+    "newDesc": "创建一个空分组。之后可在「账户」页或这里把账户移入。",
+    "namePlaceholder": "例如：已使用、常用、临时",
+    "create": "创建",
+    "creating": "创建中...",
+    "created": "已创建分组「{{name}}」",
+    "createFailed": "创建分组失败",
+    "rename": "重命名",
+    "renameTitle": "重命名分组",
+    "renameDesc": "把分组「{{name}}」改为新的名称。",
+    "save": "保存",
+    "saving": "保存中...",
+    "renamed": "已把分组「{{from}}」重命名为「{{to}}」",
+    "merged": "已把分组「{{from}}」合并到「{{to}}」",
+    "renameFailed": "重命名失败",
+    "mergeWarn": "「{{name}}」已存在 —— 保存后将合并到该分组。",
+    "delete": "删除",
+    "deleteConfirm": "确定删除分组「{{name}}」？",
+    "deleteConfirmWithAccounts": "确定删除分组「{{name}}」？其中 {{count}} 个账户会回到「未分组」。",
+    "deleted": "已删除分组「{{name}}」",
+    "deleteFailed": "删除分组失败",
+    "view": "查看账户",
+    "untagged": "未分组",
+    "empty": "暂无分组",
+    "emptyHint": "点击「新建分组」开始组织你的账户",
+    "listTitle": "全部分组",
+    "listDesc": "共 {{count}} 个分组",
+    "stats": {
+      "groups": "分组数",
+      "tagged": "已分组账户",
+      "untagged": "未分组账户"
     }
   },
   "settings": {

@@ -128,6 +128,40 @@ accounts.delete("/tags/:name", requireScope("accounts:write"), async (c) => {
   return c.json({ ok: true });
 });
 
+/** 重命名分组：tag_groups 和 accounts.tag 同步更新。
+ *  若目标名已存在则视为合并（把旧分组的账户并入目标分组，删除旧分组记录）。
+ */
+accounts.patch("/tags/:name", requireScope("accounts:write"), async (c) => {
+  const oldName = decodeURIComponent(c.req.param("name") ?? "").trim();
+  const body = await c.req.json<{ name?: string }>();
+  const newName = body.name?.trim();
+
+  if (!oldName) return c.json({ error: "old name required" }, 400);
+  if (!newName) return c.json({ error: "new name required" }, 400);
+  if (newName.length > 50) return c.json({ error: "name too long" }, 400);
+  if (oldName === newName) return c.json({ ok: true, name: newName });
+
+  const target = await c.env.DB.prepare("SELECT name FROM tag_groups WHERE name = ?").bind(newName).first();
+  const merged = !!target;
+
+  if (merged) {
+    // 目标分组已存在：把旧分组下的账户都改到新分组名，再删除旧分组记录
+    await c.env.DB.batch([
+      c.env.DB.prepare("UPDATE accounts SET tag = ?, updated_at = datetime('now') WHERE tag = ?").bind(newName, oldName),
+      c.env.DB.prepare("DELETE FROM tag_groups WHERE name = ?").bind(oldName),
+    ]);
+  } else {
+    // 目标分组不存在：先登记新名，再迁移账户和清理旧名
+    await c.env.DB.batch([
+      c.env.DB.prepare("INSERT OR IGNORE INTO tag_groups (name) VALUES (?)").bind(newName),
+      c.env.DB.prepare("UPDATE accounts SET tag = ?, updated_at = datetime('now') WHERE tag = ?").bind(newName, oldName),
+      c.env.DB.prepare("DELETE FROM tag_groups WHERE name = ?").bind(oldName),
+    ]);
+  }
+
+  return c.json({ ok: true, name: newName, merged });
+});
+
 /** 查询单个账号 */
 accounts.get("/:id", requireScope("accounts:read"), async (c) => {
   const id = c.req.param("id");

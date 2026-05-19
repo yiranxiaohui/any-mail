@@ -120,6 +120,17 @@ export function deleteTagGroup(name: string) {
   return request<{ ok: boolean }>(`/api/accounts/tags/${encodeURIComponent(name)}`, { method: "DELETE" });
 }
 
+export function renameTagGroup(oldName: string, newName: string) {
+  return request<{ ok: boolean; name: string; merged: boolean }>(
+    `/api/accounts/tags/${encodeURIComponent(oldName)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName }),
+    }
+  );
+}
+
 export function bulkTagAccounts(ids: string[], tag: string | null) {
   return request<{ ok: boolean; updated: number }>("/api/accounts/bulk-tag", {
     method: "POST",

@@ -6,6 +6,7 @@
     "inbox": "Inbox",
     "compose": "Compose",
     "accounts": "Accounts",
+    "groups": "Groups",
     "apiKeys": "API Keys",
     "settings": "Settings",
     "logout": "Logout"
@@ -176,6 +177,43 @@
       "importing": "Importing...",
       "importResult": "Imported {{success}}/{{total}} accounts",
       "importFailed": "Import failed"
+    }
+  },
+  "groups": {
+    "title": "Groups",
+    "description": "Manage account groups in one place: create, rename, delete, or jump to the accounts in each group.",
+    "new": "New group",
+    "newTitle": "New group",
+    "newDesc": "Create an empty group. You can move accounts into it from the Accounts page or here.",
+    "namePlaceholder": "e.g. used, frequent, temp",
+    "create": "Create",
+    "creating": "Creating...",
+    "created": "Group \"{{name}}\" created",
+    "createFailed": "Failed to create group",
+    "rename": "Rename",
+    "renameTitle": "Rename group",
+    "renameDesc": "Rename the group \"{{name}}\".",
+    "save": "Save",
+    "saving": "Saving...",
+    "renamed": "Renamed \"{{from}}\" to \"{{to}}\"",
+    "merged": "Merged \"{{from}}\" into \"{{to}}\"",
+    "renameFailed": "Failed to rename group",
+    "mergeWarn": "\"{{name}}\" already exists — saving will merge into that group.",
+    "delete": "Delete",
+    "deleteConfirm": "Delete group \"{{name}}\"?",
+    "deleteConfirmWithAccounts": "Delete group \"{{name}}\"? The {{count}} account(s) inside will be moved back to Untagged.",
+    "deleted": "Group \"{{name}}\" deleted",
+    "deleteFailed": "Failed to delete group",
+    "view": "View accounts",
+    "untagged": "Untagged",
+    "empty": "No groups yet",
+    "emptyHint": "Click \"New group\" to start organizing your accounts",
+    "listTitle": "All groups",
+    "listDesc": "{{count}} group(s)",
+    "stats": {
+      "groups": "Groups",
+      "tagged": "Tagged accounts",
+      "untagged": "Untagged accounts"
     }
   },
   "settings": {
