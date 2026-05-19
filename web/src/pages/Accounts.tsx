@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getAccounts, getAccount, getEmails, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, getDomains, getAccountTags, bulkTagAccounts, createTagGroup, deleteTagGroup, gmailAuthUrl, outlookAuthUrl, type Account, type Email } from "@/lib/api";
+import { getAccounts, getAccount, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, getDomains, getAccountTags, bulkTagAccounts, createTagGroup, deleteTagGroup, gmailAuthUrl, outlookAuthUrl, type Account } from "@/lib/api";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,10 +17,6 @@ export default function Accounts() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [syncingId, setSyncingId] = useState<string | null>(null);
 
-  // Inbox dialog
-  const [inboxAccount, setInboxAccount] = useState<Account | null>(null);
-  const [inboxEmails, setInboxEmails] = useState<Email[]>([]);
-  const [inboxLoading, setInboxLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -316,28 +312,12 @@ export default function Accounts() {
 
   const importLineCount = importText.trim() ? importText.trim().split("\n").filter((l) => l.trim()).length : 0;
 
-  const openInbox = async (account: Account) => {
-    setInboxAccount(account);
-    setInboxEmails([]);
-    setInboxLoading(true);
+  const handleSyncRow = async (account: Account) => {
+    setSyncingId(account.id);
     try {
-      const data = await getEmails({ account_id: account.id, limit: 50 });
-      setInboxEmails(data.emails);
-    } finally {
-      setInboxLoading(false);
-    }
-  };
-
-  const handleSyncInbox = async () => {
-    if (!inboxAccount) return;
-    setSyncingId(inboxAccount.id);
-    try {
-      const res = await syncAccount(inboxAccount.id);
+      const res = await syncAccount(account.id);
       if (res.ok) {
-        toast.success(t("accounts.syncResult", { email: inboxAccount.email, count: res.synced }));
-        // Refresh inbox
-        const data = await getEmails({ account_id: inboxAccount.id, limit: 50 });
-        setInboxEmails(data.emails);
+        toast.success(t("accounts.syncResult", { email: account.email, count: res.synced }));
       } else {
         toast.error(res.error || t("inbox.syncFailed"));
       }
@@ -482,68 +462,6 @@ export default function Accounts() {
               </div>
             </TabsContent>
           </Tabs>
-        </DialogContent>
-      </Dialog>
-
-      {/* Inbox Dialog */}
-      <Dialog open={!!inboxAccount} onOpenChange={(open) => { if (!open) setInboxAccount(null); }}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <div className="flex items-center justify-between pr-8">
-              <div>
-                <DialogTitle>{inboxAccount?.email}</DialogTitle>
-                <DialogDescription>{t("accounts.viewInbox")}</DialogDescription>
-              </div>
-              {inboxAccount?.provider !== "domain" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={syncingId === inboxAccount?.id}
-                  onClick={handleSyncInbox}
-                >
-                  {syncingId === inboxAccount?.id ? t("inbox.syncing") : t("inbox.sync")}
-                </Button>
-              )}
-            </div>
-          </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto">
-            {inboxLoading ? (
-              <div className="flex items-center justify-center py-12 text-muted-foreground">
-                <svg className="mr-2 h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                </svg>
-                {t("inbox.loading")}
-              </div>
-            ) : inboxEmails.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <p className="text-sm font-medium">{t("inbox.noEmails")}</p>
-                <p className="text-xs mt-1">{t("inbox.noEmailsHint")}</p>
-              </div>
-            ) : (
-              <div className="divide-y rounded-md border">
-                {inboxEmails.map((email) => (
-                  <Link
-                    to={`/emails/${email.id}`}
-                    key={email.id}
-                    className="flex flex-col gap-1 px-4 py-3 hover:bg-muted/50 transition-colors"
-                    onClick={() => setInboxAccount(null)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium truncate">
-                        {email.subject || t("inbox.noSubject")}
-                      </span>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap ml-3">
-                        {new Date(email.received_at).toLocaleString()}
-                      </span>
-                    </div>
-                    <span className="text-xs text-muted-foreground truncate">
-                      {t("email.from")}: {email.from_address}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
         </DialogContent>
       </Dialog>
 
@@ -899,13 +817,34 @@ export default function Accounts() {
                     <option value="__new__">{t("accounts.tags.newGroupOption")}</option>
                     {account.tag && <option value="__clear__">{t("accounts.tags.removeTag")}</option>}
                   </select>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => openInbox(account)}
+                  {account.provider !== "domain" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={syncingId === account.id}
+                      onClick={() => handleSyncRow(account)}
+                      title={t("inbox.sync")}
+                      aria-label={t("inbox.sync")}
+                    >
+                      <svg
+                        className={`h-4 w-4 ${syncingId === account.id ? "animate-spin" : ""}`}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+                      </svg>
+                    </Button>
+                  )}
+                  <Link
+                    to={`/?account_id=${account.id}`}
+                    className="inline-flex items-center justify-center rounded-md px-2.5 h-7 text-[0.8rem] font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                   >
                     {t("accounts.viewInbox")}
-                  </Button>
+                  </Link>
                   <Button
                     variant="ghost"
                     size="sm"
