@@ -27,6 +27,8 @@
     "syncResult": "Synced {{count}} new email(s)",
     "syncFailed": "Sync failed",
     "allAccounts": "All Accounts",
+    "searchAccountsPlaceholder": "Search email or group...",
+    "noMatchingAccounts": "No matching accounts",
     "searchPlaceholder": "Search by recipient...",
     "search": "Search",
     "loading": "Loading...",

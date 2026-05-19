@@ -1,19 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { Combobox } from "@base-ui/react/combobox";
+import { CheckIcon, ChevronDownIcon, SearchIcon } from "lucide-react";
 import { getEmails, getAccounts, triggerSync, type Email, type Account } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
 import ProviderBadge from "@/components/ProviderBadge";
 import { toast } from "sonner";
+
+const ALL_ACCOUNTS = "all";
 
 export default function Inbox() {
   const { t } = useTranslation();
@@ -77,6 +75,28 @@ export default function Inbox() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(page, totalPages);
 
+  const accountById = useMemo(
+    () => Object.fromEntries(accounts.map((a) => [a.id, a])) as Record<string, Account>,
+    [accounts],
+  );
+  const accountItems = useMemo(
+    () => [ALL_ACCOUNTS, ...accounts.map((a) => a.id)],
+    [accounts],
+  );
+  const accountLabel = (id: string) =>
+    id === ALL_ACCOUNTS ? t("inbox.allAccounts") : accountById[id]?.email ?? id;
+  const filterAccountQuery = (id: string, query: string) => {
+    if (id === ALL_ACCOUNTS) return true;
+    const acc = accountById[id];
+    if (!acc) return false;
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      acc.email.toLowerCase().includes(q) ||
+      (acc.tag ?? "").toLowerCase().includes(q)
+    );
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-48px)] gap-6">
       {/* Header */}
@@ -114,23 +134,66 @@ export default function Inbox() {
           <option value="outlook">Outlook</option>
           <option value="resend">Resend</option>
         </select>
-        <Select value={filterAccount} onValueChange={(v) => { setFilterAccount(v ?? "all"); setPage(1); }}>
-          <SelectTrigger className="w-[260px]">
-            <span className="truncate">
-              {filterAccount === "all"
-                ? t("inbox.allAccounts")
-                : accounts.find((a) => a.id === filterAccount)?.email ?? filterAccount}
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("inbox.allAccounts")}</SelectItem>
-            {accounts.map((a) => (
-              <SelectItem key={a.id} value={a.id}>
-                {a.email}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Combobox.Root
+          items={accountItems}
+          value={filterAccount}
+          onValueChange={(v) => { setFilterAccount(v ?? ALL_ACCOUNTS); setPage(1); }}
+          itemToStringLabel={accountLabel}
+          filter={filterAccountQuery}
+        >
+          <Combobox.Trigger className="flex h-8 w-[260px] items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50">
+            <Combobox.Value>
+              {(value: string | null) => (
+                <span className="truncate text-left">
+                  {accountLabel(value ?? ALL_ACCOUNTS)}
+                </span>
+              )}
+            </Combobox.Value>
+            <Combobox.Icon
+              render={<ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />}
+            />
+          </Combobox.Trigger>
+          <Combobox.Portal>
+            <Combobox.Positioner sideOffset={4} className="isolate z-50">
+              <Combobox.Popup className="w-[var(--anchor-width)] min-w-[260px] origin-[var(--transform-origin)] overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
+                <div className="flex items-center gap-2 border-b border-border px-2.5 py-1.5">
+                  <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
+                  <Combobox.Input
+                    placeholder={t("inbox.searchAccountsPlaceholder")}
+                    className="h-7 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                  />
+                </div>
+                <Combobox.Empty className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  {t("inbox.noMatchingAccounts")}
+                </Combobox.Empty>
+                <Combobox.List className="max-h-72 overflow-y-auto p-1">
+                  {(id: string) => {
+                    const acc = id === ALL_ACCOUNTS ? null : accountById[id];
+                    return (
+                      <Combobox.Item
+                        key={id}
+                        value={id}
+                        className="relative flex w-full cursor-default items-center gap-2 rounded-md py-1.5 pr-8 pl-1.5 text-sm outline-none select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
+                      >
+                        <span className="flex-1 truncate">
+                          {id === ALL_ACCOUNTS ? t("inbox.allAccounts") : acc?.email}
+                        </span>
+                        {acc?.tag ? (
+                          <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            {acc.tag}
+                          </span>
+                        ) : null}
+                        <Combobox.ItemIndicator className="pointer-events-none absolute right-2 flex size-4 items-center justify-center">
+                          <CheckIcon className="size-4" />
+                        </Combobox.ItemIndicator>
+                      </Combobox.Item>
+                    );
+                  }}
+                </Combobox.List>
+              </Combobox.Popup>
+            </Combobox.Positioner>
+          </Combobox.Portal>
+        </Combobox.Root>
 
         <form onSubmit={handleSearch} className="flex flex-1 gap-2">
           <Input

@@ -27,6 +27,8 @@
     "syncResult": "同步了 {{count}} 封新邮件",
     "syncFailed": "同步失败",
     "allAccounts": "所有账户",
+    "searchAccountsPlaceholder": "搜索邮箱或分组...",
+    "noMatchingAccounts": "未找到匹配的账户",
     "searchPlaceholder": "按收件人搜索...",
     "search": "搜索",
     "loading": "加载中...",
