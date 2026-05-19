@@ -125,7 +125,10 @@
       "bulkActions": "批量操作",
       "selectAllHint": "勾选要分组或移动的账户",
       "selected": "已选 {{count}} 个",
-      "deselect": "取消"
+      "deselect": "取消",
+      "searchPlaceholder": "搜索分组...",
+      "noGroupsMatch": "没有匹配的分组",
+      "manageGroups": "管理分组"
     },
     "show": "显示",
     "hide": "隐藏",

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getAccounts, getAccount, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, getDomains, getAccountTags, bulkTagAccounts, createTagGroup, deleteTagGroup, gmailAuthUrl, outlookAuthUrl, type Account } from "@/lib/api";
+import { getAccounts, getAccount, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, getDomains, getAccountTags, bulkTagAccounts, createTagGroup, gmailAuthUrl, outlookAuthUrl, type Account } from "@/lib/api";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -277,19 +277,6 @@ export default function Accounts() {
       toast.error(err instanceof Error ? err.message : t("accounts.tags.groupCreateFailed"));
     } finally {
       setCreatingGroup(false);
-    }
-  };
-
-  const handleDeleteGroup = async (name: string) => {
-    if (!confirm(t("accounts.tags.deleteGroupConfirm", { name }))) return;
-    try {
-      await deleteTagGroup(name);
-      if (filterTag === name) setFilterTag("");
-      toast.success(t("accounts.tags.groupDeleted", { name }));
-      fetchAccounts();
-      fetchTags();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("settings.saveFailed"));
     }
   };
 
@@ -654,31 +641,34 @@ export default function Accounts() {
               />
             </div>
           </div>
-          <div className="flex items-center gap-2 overflow-x-auto pt-3">
-            <TagChip active={filterTag === ""} onClick={() => { setFilterTag(""); setPage(1); }} label={t("accounts.tags.all")} count={totalAll} />
-            {tagList.map((tg) => (
-              <TagChip
-                key={tg.tag}
-                active={filterTag === tg.tag}
-                onClick={() => { setFilterTag(tg.tag); setPage(1); }}
-                label={tg.tag}
-                count={tg.count}
-                onDelete={() => handleDeleteGroup(tg.tag)}
-              />
-            ))}
-            <TagChip
-              active={filterTag === "__untagged__"}
-              onClick={() => { setFilterTag("__untagged__"); setPage(1); }}
-              label={t("accounts.tags.untagged")}
-              count={untaggedCount}
+          <div className="flex flex-wrap items-center gap-2 pt-3">
+            <GroupFilter
+              value={filterTag}
+              onChange={(v) => { setFilterTag(v); setPage(1); }}
+              groups={tagList}
+              allLabel={t("accounts.tags.all")}
+              allCount={totalAll}
+              untaggedLabel={t("accounts.tags.untagged")}
+              untaggedCount={untaggedCount}
+              searchPlaceholder={t("accounts.tags.searchPlaceholder")}
+              emptyText={t("accounts.tags.noGroupsMatch")}
             />
             <button
               type="button"
               onClick={() => openNewGroupDialog("none")}
-              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-input px-3 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-dashed border-input px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
             >
               + {t("accounts.tags.newGroup")}
             </button>
+            <Link
+              to="/groups"
+              className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              {t("accounts.tags.manageGroups")}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M13 5l7 7-7 7" />
+              </svg>
+            </Link>
           </div>
         </CardHeader>
         <Separator />
@@ -897,31 +887,146 @@ export default function Accounts() {
   );
 }
 
-function TagChip({ active, onClick, label, count, onDelete }: { active: boolean; onClick: () => void; label: string; count: number; onDelete?: () => void }) {
+function GroupFilter({
+  value,
+  onChange,
+  groups,
+  allLabel,
+  allCount,
+  untaggedLabel,
+  untaggedCount,
+  searchPlaceholder,
+  emptyText,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  groups: { tag: string; count: number }[];
+  allLabel: string;
+  allCount: number;
+  untaggedLabel: string;
+  untaggedCount: number;
+  searchPlaceholder: string;
+  emptyText: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      return;
+    }
+    const onDown = (e: MouseEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    // focus the input after the popover mounts
+    const id = window.setTimeout(() => inputRef.current?.focus(), 0);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.clearTimeout(id);
+    };
+  }, [open]);
+
+  const currentLabel = (() => {
+    if (value === "") return allLabel;
+    if (value === "__untagged__") return untaggedLabel;
+    return groups.find((g) => g.tag === value)?.tag ?? value;
+  })();
+  const currentCount = (() => {
+    if (value === "") return allCount;
+    if (value === "__untagged__") return untaggedCount;
+    return groups.find((g) => g.tag === value)?.count ?? 0;
+  })();
+
+  const q = query.trim().toLowerCase();
+  const filtered = q ? groups.filter((g) => g.tag.toLowerCase().includes(q)) : groups;
+  const showAll = !q || allLabel.toLowerCase().includes(q);
+  const showUntagged = !q || untaggedLabel.toLowerCase().includes(q);
+  const hasResults = showAll || showUntagged || filtered.length > 0;
+
   return (
-    <div
-      className={
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors " +
-        (active
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground")
-      }
-    >
-      <button type="button" onClick={onClick} className="inline-flex items-center gap-1.5">
-        {label}
-        <span className={active ? "text-primary-foreground/80" : "text-muted-foreground/60"}>{count}</span>
+    <div ref={containerRef} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="inline-flex min-w-[200px] items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm hover:bg-muted/40"
+      >
+        <span className="flex items-center gap-2 truncate">
+          <span className="truncate">{currentLabel}</span>
+          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{currentCount}</span>
+        </span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-50">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
       </button>
-      {onDelete && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className={"ml-0.5 opacity-60 hover:opacity-100 " + (active ? "hover:text-white" : "hover:text-destructive")}
-          title="Delete group"
-        >
-          ×
-        </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-md border bg-popover p-1 shadow-md">
+          <div className="px-1 pb-1">
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+              placeholder={searchPlaceholder}
+              className="w-full rounded border border-input bg-background px-2 py-1 text-sm outline-none focus:border-primary"
+            />
+          </div>
+          <div className="max-h-64 overflow-y-auto">
+            {!hasResults ? (
+              <div className="px-2 py-4 text-center text-xs text-muted-foreground">{emptyText}</div>
+            ) : (
+              <>
+                {showAll && (
+                  <ComboboxItem
+                    active={value === ""}
+                    label={allLabel}
+                    count={allCount}
+                    onSelect={() => { onChange(""); setOpen(false); }}
+                  />
+                )}
+                {filtered.map((g) => (
+                  <ComboboxItem
+                    key={g.tag}
+                    active={value === g.tag}
+                    label={g.tag}
+                    count={g.count}
+                    onSelect={() => { onChange(g.tag); setOpen(false); }}
+                  />
+                ))}
+                {showUntagged && (
+                  <ComboboxItem
+                    active={value === "__untagged__"}
+                    label={untaggedLabel}
+                    count={untaggedCount}
+                    onSelect={() => { onChange("__untagged__"); setOpen(false); }}
+                  />
+                )}
+              </>
+            )}
+          </div>
+        </div>
       )}
     </div>
+  );
+}
+
+function ComboboxItem({ active, label, count, onSelect }: { active: boolean; label: string; count: number; onSelect: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={
+        "flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors " +
+        (active ? "bg-accent text-accent-foreground" : "hover:bg-muted")
+      }
+    >
+      <span className="truncate">{label}</span>
+      <span className="shrink-0 text-xs text-muted-foreground">{count}</span>
+    </button>
   );
 }
 

@@ -125,7 +125,10 @@
       "bulkActions": "Bulk actions",
       "selectAllHint": "Select accounts to group or move",
       "selected": "{{count}} selected",
-      "deselect": "Cancel"
+      "deselect": "Cancel",
+      "searchPlaceholder": "Search groups...",
+      "noGroupsMatch": "No matching groups",
+      "manageGroups": "Manage groups"
     },
     "show": "Show",
     "hide": "Hide",
