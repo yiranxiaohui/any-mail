@@ -298,3 +298,22 @@ export function updateApiKey(id: string, data: { name?: string; scopes?: string[
 export function deleteApiKey(id: string) {
   return request<{ ok: boolean }>(`/api/keys/${id}`, { method: "DELETE" });
 }
+
+// User-owned domains
+export interface UserDomain {
+  domain_name: string;
+  created_at: string;
+}
+export function getUserDomains() {
+  return request<{ domains: UserDomain[] }>("/api/user-domains");
+}
+export function addUserDomain(name: string) {
+  return request<{ ok: boolean; name: string }>("/api/user-domains", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+export function deleteUserDomain(name: string) {
+  return request<{ ok: boolean }>(`/api/user-domains/${encodeURIComponent(name)}`, { method: "DELETE" });
+}

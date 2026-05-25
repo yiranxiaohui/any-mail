@@ -195,6 +195,20 @@ accounts.post("/", requireScope("accounts:write"), async (c) => {
   if (!email || !email.includes("@")) {
     return c.json({ error: "invalid email" }, 400);
   }
+  const domain = email.split("@")[1];
+  if (!domain) return c.json({ error: "invalid email" }, 400);
+
+  // 校验域名归属：admin 全局列表 或 该用户在 user_domains 里声明的
+  const [globalRow, ownedRow] = await c.env.DB.batch([
+    c.env.DB.prepare("SELECT value FROM settings WHERE key = 'EMAIL_DOMAINS'"),
+    c.env.DB.prepare("SELECT 1 FROM user_domains WHERE user_id = ? AND domain_name = ?").bind(userId, domain),
+  ]);
+  const globalValue = (globalRow?.results[0] as { value: string } | undefined)?.value ?? "";
+  const inGlobal = globalValue.split(",").map((d) => d.trim().toLowerCase()).includes(domain);
+  const inOwned = !!(ownedRow?.results[0]);
+  if (!inGlobal && !inOwned) {
+    return c.json({ error: `domain ${domain} is not available. Add it under "My Domains" first.` }, 403);
+  }
 
   // 域名邮件的收件人在系统内必须唯一（投递时只能给一个 user）
   const existing = await c.env.DB.prepare(

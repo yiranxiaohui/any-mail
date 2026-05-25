@@ -8,6 +8,7 @@ import Inbox from "@/pages/Inbox";
 import EmailDetail from "@/pages/EmailDetail";
 import Accounts from "@/pages/Accounts";
 import Groups from "@/pages/Groups";
+import Domains from "@/pages/Domains";
 import ApiKeys from "@/pages/ApiKeys";
 import Settings from "@/pages/Settings";
 import Compose from "@/pages/Compose";
@@ -40,6 +41,7 @@ export default function App() {
             <Route path="compose" element={<Compose />} />
             <Route path="accounts" element={<Accounts />} />
             <Route path="groups" element={<Groups />} />
+            <Route path="domains" element={<Domains />} />
             <Route path="api-keys" element={<ApiKeys />} />
             <Route path="settings" element={<Settings />} />
           </Route>

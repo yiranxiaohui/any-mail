@@ -11,6 +11,7 @@ import accountsRoute from "./routes/accounts";
 import oauthRoute from "./routes/oauth";
 import settingsRoute from "./routes/settings";
 import apiKeysRoute from "./routes/api-keys";
+import userDomainsRoute from "./routes/user-domains";
 
 const app = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext; user?: UserContext } }>();
 
@@ -55,6 +56,7 @@ app.route("/api/emails", emailsRoute);
 app.route("/api/accounts", accountsRoute);
 app.route("/api/settings", settingsRoute);
 app.route("/api/keys", apiKeysRoute);
+app.route("/api/user-domains", userDomainsRoute);
 
 // 公开域名列表（系统级，所有登录用户可见，API key 可通过 domains:read 访问）
 app.get("/api/domains", requireScope("domains:read"), async (c) => {
