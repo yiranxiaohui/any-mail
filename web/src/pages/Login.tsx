@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
 import { apiLogin } from "@/lib/api";
@@ -69,6 +69,11 @@ export default function Login() {
                 t("login.signIn")
               )}
             </Button>
+            <div className="text-center">
+              <Link to="/receive" className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+                {t("login.goReceive")}
+              </Link>
+            </div>
           </form>
         </CardContent>
       </Card>

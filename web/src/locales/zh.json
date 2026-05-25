@@ -17,7 +17,38 @@
     "password": "密码",
     "signIn": "登录",
     "signingIn": "登录中...",
-    "invalidPassword": "密码错误"
+    "invalidPassword": "密码错误",
+    "goReceive": "用 API 密钥接码"
+  },
+  "receive": {
+    "title": "接码",
+    "adminLogin": "管理员登录",
+    "formTitle": "获取最新邮件",
+    "formDescription": "粘贴 API 密钥（需要 emails:read 权限），即可获取最近 {{minutes}} 分钟内的邮件。无需登录。",
+    "fields": {
+      "apiKey": "API 密钥",
+      "to": "收件邮箱（可选）",
+      "toPlaceholder": "user@yourdomain.com",
+      "codeRegex": "验证码正则（可选，优先取第一个捕获组）"
+    },
+    "fetch": "获取",
+    "fetching": "获取中...",
+    "autoPollOff": "自动刷新：关",
+    "autoPollOn": "自动刷新：开",
+    "lastFetched": "更新于 {{time}}",
+    "idle": "输入 API 密钥后点击「获取」开始。",
+    "noEmails": "近 10 分钟内没有新邮件。",
+    "noSubject": "（无主题）",
+    "code": "验证码",
+    "copied": "已复制",
+    "copyFailed": "复制失败",
+    "errors": {
+      "missingKey": "请输入 API 密钥",
+      "unauthorized": "API 密钥无效或权限不足",
+      "badRequest": "请求参数错误",
+      "requestFailed": "请求失败（{{status}}）",
+      "network": "网络错误"
+    }
   },
   "inbox": {
     "title": "收件箱",

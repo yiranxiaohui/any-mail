@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import Layout from "@/components/Layout";
 import Login from "@/pages/Login";
+import Receive from "@/pages/Receive";
 import Inbox from "@/pages/Inbox";
 import EmailDetail from "@/pages/EmailDetail";
 import Accounts from "@/pages/Accounts";
@@ -28,6 +29,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/receive" element={<Receive />} />
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route path="/" element={<Inbox />} />
             <Route path="/emails/:id" element={<EmailDetail />} />

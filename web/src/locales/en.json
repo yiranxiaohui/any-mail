@@ -17,7 +17,38 @@
     "password": "Password",
     "signIn": "Sign in",
     "signingIn": "Signing in...",
-    "invalidPassword": "Invalid password"
+    "invalidPassword": "Invalid password",
+    "goReceive": "Receive code with API key"
+  },
+  "receive": {
+    "title": "Code Receiver",
+    "adminLogin": "Admin login",
+    "formTitle": "Fetch latest emails",
+    "formDescription": "Paste an API key (with emails:read scope) to fetch emails from the last {{minutes}} minutes. No login required.",
+    "fields": {
+      "apiKey": "API key",
+      "to": "Recipient (optional)",
+      "toPlaceholder": "user@yourdomain.com",
+      "codeRegex": "Code regex (optional, first group preferred)"
+    },
+    "fetch": "Fetch",
+    "fetching": "Fetching...",
+    "autoPollOff": "Auto-refresh: off",
+    "autoPollOn": "Auto-refresh: on",
+    "lastFetched": "Updated {{time}}",
+    "idle": "Enter an API key and click Fetch to start.",
+    "noEmails": "No emails in the last 10 minutes.",
+    "noSubject": "(no subject)",
+    "code": "Code",
+    "copied": "Copied",
+    "copyFailed": "Copy failed",
+    "errors": {
+      "missingKey": "API key is required",
+      "unauthorized": "Invalid or unauthorized API key",
+      "badRequest": "Bad request",
+      "requestFailed": "Request failed ({{status}})",
+      "network": "Network error"
+    }
   },
   "inbox": {
     "title": "Inbox",
