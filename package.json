@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "db:migrate:local": "wrangler d1 execute any-mail-db --local --file=migrations/0001_init.sql && wrangler d1 execute any-mail-db --local --file=migrations/0002_settings.sql",
-    "db:migrate:remote": "wrangler d1 execute any-mail-db --remote --file=migrations/0001_init.sql && wrangler d1 execute any-mail-db --remote --file=migrations/0002_settings.sql"
+    "db:migrate:local": "for f in migrations/*.sql; do echo \"-- $f --\"; wrangler d1 execute any-mail-db --local --file=\"$f\" || exit 1; done",
+    "db:migrate:remote": "for f in migrations/*.sql; do echo \"-- $f --\"; wrangler d1 execute any-mail-db --remote --file=\"$f\" || exit 1; done"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260416.2",
