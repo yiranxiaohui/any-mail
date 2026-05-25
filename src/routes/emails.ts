@@ -1,11 +1,13 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
-import { requireScope, type ApiKeyContext } from "../auth";
+import { requireScope, getUserId, type ApiKeyContext, type UserContext } from "../auth";
+import { getResendApiKey } from "../settings";
 
-const emails = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext } }>();
+const emails = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext; user?: UserContext } }>();
 
 /** 查询邮件列表 */
 emails.get("/", requireScope("emails:read"), async (c) => {
+  const userId = getUserId(c);
   const accountId = c.req.query("account_id");
   const providerQuery = c.req.query("provider");
   const to = c.req.query("to");
@@ -16,10 +18,10 @@ emails.get("/", requireScope("emails:read"), async (c) => {
   const keyProvider = c.get("apiKey")?.provider ?? null;
   const provider = keyProvider ?? providerQuery;
 
-  let sql = "SELECT * FROM emails WHERE 1=1";
-  let countSql = "SELECT COUNT(*) as total FROM emails WHERE 1=1";
-  const params: string[] = [];
-  const countParams: string[] = [];
+  let sql = "SELECT * FROM emails WHERE user_id = ?";
+  let countSql = "SELECT COUNT(*) as total FROM emails WHERE user_id = ?";
+  const params: string[] = [userId];
+  const countParams: string[] = [userId];
 
   if (accountId) {
     sql += " AND account_id = ?";
@@ -57,6 +59,7 @@ emails.get("/", requireScope("emails:read"), async (c) => {
 
 /** 接码专用：按收件人过滤拉取最新邮件（含可选正则提取验证码） */
 emails.get("/latest", requireScope("emails:read"), async (c) => {
+  const userId = getUserId(c);
   const to = c.req.query("to");
   const since = c.req.query("since");
   const limit = Math.min(parseInt(c.req.query("limit") ?? "10"), 50);
@@ -64,8 +67,8 @@ emails.get("/latest", requireScope("emails:read"), async (c) => {
 
   const keyProvider = c.get("apiKey")?.provider ?? null;
 
-  let sql = "SELECT * FROM emails WHERE 1=1";
-  const params: string[] = [];
+  let sql = "SELECT * FROM emails WHERE user_id = ?";
+  const params: string[] = [userId];
 
   if (to) {
     sql += " AND to_address LIKE ?";
@@ -106,11 +109,12 @@ emails.get("/latest", requireScope("emails:read"), async (c) => {
 
 /** 查询单封邮件 */
 emails.get("/:id", requireScope("emails:read"), async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const keyProvider = c.get("apiKey")?.provider ?? null;
 
-  const email = await c.env.DB.prepare("SELECT * FROM emails WHERE id = ?")
-    .bind(id)
+  const email = await c.env.DB.prepare("SELECT * FROM emails WHERE id = ? AND user_id = ?")
+    .bind(id, userId)
     .first<{ provider: string }>();
 
   if (!email) return c.json({ error: "not found" }, 404);
@@ -122,6 +126,7 @@ emails.get("/:id", requireScope("emails:read"), async (c) => {
 
 /** 发送邮件（通过 Resend） */
 emails.post("/send", requireScope("emails:send"), async (c) => {
+  const userId = getUserId(c);
   const body = await c.req.json<{
     from: string;
     to: string;
@@ -134,17 +139,15 @@ emails.post("/send", requireScope("emails:send"), async (c) => {
     return c.json({ error: "from, to, subject are required" }, 400);
   }
 
-  // 从 settings 读取 Resend API Key
-  const row = await c.env.DB.prepare("SELECT value FROM settings WHERE key = 'RESEND_API_KEY'")
-    .first<{ value: string }>();
-  if (!row?.value) {
+  const apiKey = await getResendApiKey(c.env, userId);
+  if (!apiKey) {
     return c.json({ error: "Resend API key not configured. Set it in Settings." }, 400);
   }
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${row.value}`,
+      "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -175,26 +178,25 @@ emails.post("/send", requireScope("emails:send"), async (c) => {
   // 保存到已发送记录
   const id = crypto.randomUUID();
   await c.env.DB.prepare(
-    `INSERT INTO emails (id, account_id, message_id, provider, from_address, to_address, subject, text_body, html_body, raw_headers, received_at)
-     VALUES (?, '', ?, 'resend', ?, ?, ?, ?, ?, '{}', datetime('now'))`
-  ).bind(id, result.id, body.from, body.to, body.subject, body.text || "", body.html || "").run();
+    `INSERT INTO emails (id, user_id, account_id, message_id, provider, from_address, to_address, subject, text_body, html_body, raw_headers, received_at)
+     VALUES (?, ?, '', ?, 'resend', ?, ?, ?, ?, ?, '{}', datetime('now'))`
+  ).bind(id, userId, result.id, body.from, body.to, body.subject, body.text || "", body.html || "").run();
 
   return c.json({ ok: true, id: result.id });
 });
 
 /** 删除邮件 */
 emails.delete("/:id", requireScope("emails:delete"), async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const keyProvider = c.get("apiKey")?.provider ?? null;
 
-  if (keyProvider) {
-    const row = await c.env.DB.prepare("SELECT provider FROM emails WHERE id = ?")
-      .bind(id).first<{ provider: string }>();
-    if (!row) return c.json({ error: "not found" }, 404);
-    if (row.provider !== keyProvider) return c.json({ error: "not found" }, 404);
-  }
+  const row = await c.env.DB.prepare("SELECT provider FROM emails WHERE id = ? AND user_id = ?")
+    .bind(id, userId).first<{ provider: string }>();
+  if (!row) return c.json({ error: "not found" }, 404);
+  if (keyProvider && row.provider !== keyProvider) return c.json({ error: "not found" }, 404);
 
-  await c.env.DB.prepare("DELETE FROM emails WHERE id = ?").bind(id).run();
+  await c.env.DB.prepare("DELETE FROM emails WHERE id = ? AND user_id = ?").bind(id, userId).run();
   return c.json({ ok: true });
 });
 

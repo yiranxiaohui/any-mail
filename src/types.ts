@@ -12,6 +12,7 @@ export interface Env {
 
 export interface Account {
   id: string;
+  user_id: string;
   provider: "domain" | "gmail" | "outlook";
   email: string;
   password: string | null;

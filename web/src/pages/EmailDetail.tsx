@@ -28,7 +28,7 @@ export default function EmailDetail() {
   const navigate = useNavigate();
   const goBack = () => {
     if (window.history.length > 1) navigate(-1);
-    else navigate("/");
+    else navigate("/console");
   };
   const [email, setEmail] = useState<Email | null>(null);
   const [loading, setLoading] = useState(true);
@@ -83,7 +83,7 @@ export default function EmailDetail() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate(`/compose?to=${encodeURIComponent(email.from_address)}&from=${encodeURIComponent(email.to_address)}&subject=${encodeURIComponent(`Re: ${email.subject}`)}`)}
+          onClick={() => navigate(`/console/compose?to=${encodeURIComponent(email.from_address)}&from=${encodeURIComponent(email.to_address)}&subject=${encodeURIComponent(`Re: ${email.subject}`)}`)}
         >
           <svg className="mr-1.5 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="9 17 4 12 9 7" />

@@ -232,7 +232,7 @@ export default function Inbox() {
           <div className="divide-y overflow-y-auto flex-1 min-h-0">
             {emails.map((email) => (
               <Link
-                to={`/emails/${email.id}`}
+                to={`/console/emails/${email.id}`}
                 key={email.id}
                 className="flex flex-col gap-1.5 px-5 py-4 hover:bg-muted/50 transition-colors"
               >

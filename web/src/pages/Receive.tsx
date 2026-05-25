@@ -139,8 +139,11 @@ export default function Receive() {
             <Button variant="ghost" size="sm" onClick={toggleLang}>
               {i18n.language === "zh" ? "English" : "中文"}
             </Button>
+            <Button variant="ghost" size="sm" render={<Link to="/register" />}>
+              {t("receive.register")}
+            </Button>
             <Button variant="ghost" size="sm" render={<Link to="/login" />}>
-              {t("receive.adminLogin")}
+              {t("receive.login")}
             </Button>
           </div>
         </div>

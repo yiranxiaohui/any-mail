@@ -14,9 +14,23 @@ export type Scope =
 
 export interface ApiKeyContext {
   id: string;
+  user_id: string;
   scopes: string[];
   provider: string | null;
 }
+
+export interface UserContext {
+  id: string;
+  role: "admin" | "user";
+}
+
+export const ADMIN_USER_ID = "admin";
+export const ADMIN_EMAIL = "admin@local";
+
+type AppVars = {
+  apiKey?: ApiKeyContext;
+  user?: UserContext;
+};
 
 /** 生成 token：base64(payload).base64(signature) */
 async function signToken(payload: Record<string, unknown>, secret: string): Promise<string> {
@@ -60,24 +74,88 @@ async function verifyToken(token: string, secret: string): Promise<Record<string
   return payload;
 }
 
-/** 从 DB 读取管理员密码，未设置则默认 "admin" */
-async function getAdminPassword(db: D1Database): Promise<string> {
+export async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function legacyAdminPassword(db: D1Database): Promise<string> {
   const row = await db.prepare("SELECT value FROM settings WHERE key = 'ADMIN_PASSWORD'")
     .first<{ value: string }>();
   return row?.value ?? "admin";
 }
 
-/** 登录：验证密码，返回 token */
-export async function login(password: string, env: { DB: D1Database; JWT_SECRET: string }) {
-  const adminPassword = await getAdminPassword(env.DB);
-  if (password !== adminPassword) {
-    return null;
+interface UserRow {
+  id: string;
+  email: string;
+  password_hash: string | null;
+  role: "admin" | "user";
+}
+
+/** 用 email + 密码登录；admin@local 用户的 password_hash 缺失时回退到 ADMIN_PASSWORD setting 并完成首次落库 */
+export async function login(
+  email: string,
+  password: string,
+  env: { DB: D1Database; JWT_SECRET: string },
+): Promise<{ token: string; user: UserContext } | { error: string }> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized || !password) return { error: "email and password required" };
+
+  const user = await env.DB.prepare(
+    "SELECT id, email, password_hash, role FROM users WHERE email = ?"
+  ).bind(normalized).first<UserRow>();
+
+  if (!user) return { error: "invalid credentials" };
+
+  const hashed = await sha256Hex(password);
+
+  if (user.password_hash) {
+    if (hashed !== user.password_hash) return { error: "invalid credentials" };
+  } else {
+    // 兼容：admin 首次登录时仍允许用 settings.ADMIN_PASSWORD，登录成功后写入 hash
+    if (user.id !== ADMIN_USER_ID) return { error: "invalid credentials" };
+    const legacy = await legacyAdminPassword(env.DB);
+    if (password !== legacy) return { error: "invalid credentials" };
+    await env.DB.prepare("UPDATE users SET password_hash = ? WHERE id = ?")
+      .bind(hashed, user.id).run();
   }
+
+  const ctx: UserContext = { id: user.id, role: user.role };
   const token = await signToken(
-    { role: "admin", exp: Date.now() + TOKEN_EXPIRY },
-    env.JWT_SECRET
+    { uid: ctx.id, role: ctx.role, exp: Date.now() + TOKEN_EXPIRY },
+    env.JWT_SECRET,
   );
-  return token;
+  return { token, user: ctx };
+}
+
+/** 注册新用户（开放注册） */
+export async function registerUser(
+  email: string,
+  password: string,
+  env: { DB: D1Database; JWT_SECRET: string },
+): Promise<{ token: string; user: UserContext } | { error: string }> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized.includes("@")) return { error: "invalid email" };
+  if (password.length < 6) return { error: "password must be at least 6 characters" };
+
+  const existing = await env.DB.prepare("SELECT id FROM users WHERE email = ?")
+    .bind(normalized).first();
+  if (existing) return { error: "email already registered" };
+
+  const id = crypto.randomUUID();
+  const hash = await sha256Hex(password);
+  await env.DB.prepare(
+    "INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, 'user')"
+  ).bind(id, normalized, hash).run();
+
+  const ctx: UserContext = { id, role: "user" };
+  const token = await signToken(
+    { uid: id, role: "user", exp: Date.now() + TOKEN_EXPIRY },
+    env.JWT_SECRET,
+  );
+  return { token, user: ctx };
 }
 
 /** 生成一把新的 API key（明文），返回 { plaintext, hash, prefix } */
@@ -93,15 +171,9 @@ export async function generateApiKey(): Promise<{ plaintext: string; hash: strin
   return { plaintext, hash, prefix };
 }
 
-export async function sha256Hex(input: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 interface ApiKeyRow {
   id: string;
+  user_id: string;
   scopes: string;
   provider: string | null;
   expires_at: string | null;
@@ -110,7 +182,7 @@ interface ApiKeyRow {
 async function lookupApiKey(db: D1Database, plaintext: string): Promise<ApiKeyContext | null> {
   const hash = await sha256Hex(plaintext);
   const row = await db.prepare(
-    "SELECT id, scopes, provider, expires_at FROM api_keys WHERE key_hash = ?"
+    "SELECT id, user_id, scopes, provider, expires_at FROM api_keys WHERE key_hash = ?"
   ).bind(hash).first<ApiKeyRow>();
 
   if (!row) return null;
@@ -122,6 +194,7 @@ async function lookupApiKey(db: D1Database, plaintext: string): Promise<ApiKeyCo
 
   return {
     id: row.id,
+    user_id: row.user_id,
     scopes: row.scopes.split(",").map((s) => s.trim()).filter(Boolean),
     provider: row.provider,
   };
@@ -129,7 +202,7 @@ async function lookupApiKey(db: D1Database, plaintext: string): Promise<ApiKeyCo
 
 /** Hono 中间件：验证 Authorization header（JWT 或 API key） */
 export function authMiddleware() {
-  return async (c: Context<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext } }>, next: Next) => {
+  return async (c: Context<{ Bindings: Env; Variables: AppVars }>, next: Next) => {
     const authHeader = c.req.header("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return c.json({ error: "unauthorized" }, 401);
@@ -141,6 +214,11 @@ export function authMiddleware() {
       const key = await lookupApiKey(c.env.DB, token);
       if (!key) return c.json({ error: "invalid or expired api key" }, 401);
       c.set("apiKey", key);
+      // API key 也带出 owner user 上下文，便于路由统一处理
+      const userRow = await c.env.DB.prepare("SELECT id, role FROM users WHERE id = ?")
+        .bind(key.user_id).first<{ id: string; role: "admin" | "user" }>();
+      if (!userRow) return c.json({ error: "api key user no longer exists" }, 401);
+      c.set("user", userRow);
       await next();
       return;
     }
@@ -149,14 +227,18 @@ export function authMiddleware() {
     if (!payload) {
       return c.json({ error: "invalid or expired token" }, 401);
     }
+    const uid = typeof payload.uid === "string" ? payload.uid : null;
+    const role = payload.role === "admin" ? "admin" : "user";
+    if (!uid) return c.json({ error: "invalid token payload" }, 401);
+    c.set("user", { id: uid, role });
 
     await next();
   };
 }
 
-/** 要求 JWT（拒绝 API key），用于 key 管理等敏感操作 */
+/** 要求 JWT（拒绝 API key），用于 key 管理、设置等敏感操作 */
 export function requireJwt() {
-  return async (c: Context<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext } }>, next: Next) => {
+  return async (c: Context<{ Bindings: Env; Variables: AppVars }>, next: Next) => {
     if (c.get("apiKey")) {
       return c.json({ error: "api keys cannot access this endpoint" }, 403);
     }
@@ -164,9 +246,23 @@ export function requireJwt() {
   };
 }
 
+/** 要求当前用户是 admin（用于系统级设置） */
+export function requireAdmin() {
+  return async (c: Context<{ Bindings: Env; Variables: AppVars }>, next: Next) => {
+    if (c.get("apiKey")) {
+      return c.json({ error: "api keys cannot access this endpoint" }, 403);
+    }
+    const user = c.get("user");
+    if (!user || user.role !== "admin") {
+      return c.json({ error: "admin only" }, 403);
+    }
+    await next();
+  };
+}
+
 /** 要求 API key 拥有指定 scope 之一（若为 JWT 则直接放行） */
 export function requireScope(...scopes: Scope[]) {
-  return async (c: Context<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext } }>, next: Next) => {
+  return async (c: Context<{ Bindings: Env; Variables: AppVars }>, next: Next) => {
     const key = c.get("apiKey");
     if (!key) {
       await next();
@@ -182,4 +278,11 @@ export function requireScope(...scopes: Scope[]) {
     }
     await next();
   };
+}
+
+/** Get current user id (always set by authMiddleware) */
+export function getUserId(c: Context<{ Bindings: Env; Variables: AppVars }>): string {
+  const u = c.get("user");
+  if (!u) throw new Error("user context missing — route is not behind authMiddleware");
+  return u.id;
 }

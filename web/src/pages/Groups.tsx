@@ -207,7 +207,7 @@ export default function Groups() {
             <GroupRow
               name={t("groups.untagged")}
               count={untaggedCount}
-              viewHref="/accounts?tag=__untagged__"
+              viewHref="/console/accounts?tag=__untagged__"
               special
               viewLabel={t("groups.view")}
             />
@@ -225,7 +225,7 @@ export default function Groups() {
                   key={g.tag}
                   name={g.tag}
                   count={g.count}
-                  viewHref={`/accounts?tag=${encodeURIComponent(g.tag)}`}
+                  viewHref={`/console/accounts?tag=${encodeURIComponent(g.tag)}`}
                   viewLabel={t("groups.view")}
                   onRename={() => openRename(g.tag)}
                   onDelete={() => handleDelete(g.tag, g.count)}

@@ -1,4 +1,4 @@
-import type { Env, Account } from "../types";
+import type { Account } from "../types";
 import type { OAuthCredentials } from "../settings";
 
 const GMAIL_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -8,7 +8,7 @@ const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
 const SCOPES = "https://www.googleapis.com/auth/gmail.readonly";
 
 /** 生成 Gmail OAuth 授权链接 */
-export function getGmailAuthUrl(creds: OAuthCredentials, origin: string): string {
+export function getGmailAuthUrl(creds: OAuthCredentials, origin: string, state: string): string {
   const params = new URLSearchParams({
     client_id: creds.gmailClientId,
     redirect_uri: `${origin}/api/oauth/gmail/callback`,
@@ -16,12 +16,19 @@ export function getGmailAuthUrl(creds: OAuthCredentials, origin: string): string
     scope: SCOPES,
     access_type: "offline",
     prompt: "consent",
+    state,
   });
   return `${GMAIL_AUTH_URL}?${params}`;
 }
 
-/** 用 authorization code 换取 token，并创建 account */
-export async function handleGmailCallback(code: string, creds: OAuthCredentials, origin: string, db: D1Database): Promise<Account> {
+/** 用 authorization code 换取 token，并创建 account（归到指定 user） */
+export async function handleGmailCallback(
+  code: string,
+  creds: OAuthCredentials,
+  origin: string,
+  db: D1Database,
+  userId: string,
+): Promise<Account> {
   const tokenRes = await fetch(GMAIL_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -50,12 +57,12 @@ export async function handleGmailCallback(code: string, creds: OAuthCredentials,
   const expiresAt = Date.now() + token.expires_in * 1000;
 
   await db.prepare(
-    `INSERT INTO accounts (id, provider, email, access_token, refresh_token, token_expires_at, last_sync_history_id)
-     VALUES (?, 'gmail', ?, ?, ?, ?, ?)
-     ON CONFLICT(email) DO UPDATE SET access_token=?, refresh_token=?, token_expires_at=?, last_sync_history_id=?, updated_at=datetime('now')`
+    `INSERT INTO accounts (id, user_id, provider, email, access_token, refresh_token, token_expires_at, last_sync_history_id)
+     VALUES (?, ?, 'gmail', ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, provider, email) DO UPDATE SET access_token=?, refresh_token=?, token_expires_at=?, last_sync_history_id=?, updated_at=datetime('now')`
   )
     .bind(
-      id, profile.emailAddress,
+      id, userId, profile.emailAddress,
       token.access_token, token.refresh_token, expiresAt, profile.historyId,
       token.access_token, token.refresh_token, expiresAt, profile.historyId
     )
@@ -63,6 +70,7 @@ export async function handleGmailCallback(code: string, creds: OAuthCredentials,
 
   return {
     id,
+    user_id: userId,
     provider: "gmail",
     email: profile.emailAddress,
     access_token: token.access_token,
@@ -107,7 +115,7 @@ async function refreshGmailToken(account: Account, creds: OAuthCredentials, db: 
 }
 
 /** 拉取 Gmail 新邮件 */
-export async function syncGmailEmails(account: Account, creds: OAuthCredentials, db: D1Database): Promise<number> {
+export async function syncGmailEmails(account: Account & { user_id: string }, creds: OAuthCredentials, db: D1Database): Promise<number> {
   const accessToken = await refreshGmailToken(account, creds, db);
   let synced = 0;
 
@@ -140,11 +148,12 @@ export async function syncGmailEmails(account: Account, creds: OAuthCredentials,
     const htmlBody = extractGmailBody(detail.payload, "text/html");
 
     await db.prepare(
-      `INSERT OR IGNORE INTO emails (id, account_id, message_id, provider, from_address, to_address, subject, text_body, html_body, raw_headers, received_at)
-       VALUES (?, ?, ?, 'gmail', ?, ?, ?, ?, ?, ?, datetime(? / 1000, 'unixepoch'))`
+      `INSERT OR IGNORE INTO emails (id, user_id, account_id, message_id, provider, from_address, to_address, subject, text_body, html_body, raw_headers, received_at)
+       VALUES (?, ?, ?, ?, 'gmail', ?, ?, ?, ?, ?, ?, datetime(? / 1000, 'unixepoch'))`
     )
       .bind(
         crypto.randomUUID(),
+        account.user_id,
         account.id,
         msg.id,
         headers["from"] ?? "",

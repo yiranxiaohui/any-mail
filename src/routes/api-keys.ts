@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
-import { generateApiKey, requireJwt, type ApiKeyContext } from "../auth";
+import { generateApiKey, requireJwt, getUserId, type ApiKeyContext, type UserContext } from "../auth";
 
 const VALID_SCOPES = new Set([
   "emails:read",
@@ -14,21 +14,23 @@ const VALID_SCOPES = new Set([
 
 const VALID_PROVIDERS = new Set(["domain", "gmail", "outlook"]);
 
-const keys = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext } }>();
+const keys = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext; user?: UserContext } }>();
 
 // 所有 key 管理路由仅限 JWT
 keys.use("*", requireJwt());
 
-/** 列出所有 API key（不包含明文或 hash） */
+/** 列出当前用户的所有 API key */
 keys.get("/", async (c) => {
+  const userId = getUserId(c);
   const rows = await c.env.DB.prepare(
-    "SELECT id, name, key_prefix, scopes, provider, expires_at, last_used_at, created_at FROM api_keys ORDER BY created_at DESC"
-  ).all();
+    "SELECT id, name, key_prefix, scopes, provider, expires_at, last_used_at, created_at FROM api_keys WHERE user_id = ? ORDER BY created_at DESC"
+  ).bind(userId).all();
   return c.json({ keys: rows.results });
 });
 
 /** 创建 API key，明文仅在本次响应返回 */
 keys.post("/", async (c) => {
+  const userId = getUserId(c);
   const body = await c.req.json<{
     name?: string;
     scopes?: string[];
@@ -52,9 +54,9 @@ keys.post("/", async (c) => {
   const id = crypto.randomUUID();
 
   await c.env.DB.prepare(
-    `INSERT INTO api_keys (id, name, key_hash, key_prefix, scopes, provider, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).bind(id, name, hash, prefix, scopes.join(","), provider, expiresAt).run();
+    `INSERT INTO api_keys (id, user_id, name, key_hash, key_prefix, scopes, provider, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(id, userId, name, hash, prefix, scopes.join(","), provider, expiresAt).run();
 
   return c.json({
     ok: true,
@@ -72,6 +74,7 @@ keys.post("/", async (c) => {
 
 /** 编辑 API key（不允许改 hash；可改 name/scopes/provider/expires_at） */
 keys.patch("/:id", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const body = await c.req.json<{
     name?: string;
@@ -109,8 +112,9 @@ keys.patch("/:id", async (c) => {
   if (fields.length === 0) return c.json({ error: "no fields to update" }, 400);
 
   values.push(id);
+  values.push(userId);
   await c.env.DB.prepare(
-    `UPDATE api_keys SET ${fields.join(", ")} WHERE id = ?`
+    `UPDATE api_keys SET ${fields.join(", ")} WHERE id = ? AND user_id = ?`
   ).bind(...values).run();
 
   return c.json({ ok: true });
@@ -118,8 +122,9 @@ keys.patch("/:id", async (c) => {
 
 /** 撤销（删除）API key */
 keys.delete("/:id", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
-  await c.env.DB.prepare("DELETE FROM api_keys WHERE id = ?").bind(id).run();
+  await c.env.DB.prepare("DELETE FROM api_keys WHERE id = ? AND user_id = ?").bind(id, userId).run();
   return c.json({ ok: true });
 });
 

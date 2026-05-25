@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Env, Account } from "./types";
-import { login, authMiddleware, requireJwt, requireScope, type ApiKeyContext } from "./auth";
+import { login, registerUser, authMiddleware, requireJwt, requireScope, getUserId, type ApiKeyContext, type UserContext } from "./auth";
 import { handleDomainEmail } from "./providers/domain";
 import { syncGmailEmails } from "./providers/gmail";
 import { syncOutlookEmails } from "./providers/outlook";
@@ -12,28 +12,43 @@ import oauthRoute from "./routes/oauth";
 import settingsRoute from "./routes/settings";
 import apiKeysRoute from "./routes/api-keys";
 
-const app = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext } }>();
+const app = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext; user?: UserContext } }>();
 
 app.use("/*", cors());
 
 // 健康检查
 app.get("/", (c) => c.json({ name: "any-mail", status: "ok" }));
 
-// 登录（不需要 token）
+// 登录 — email + password；保留 password-only 兼容老 admin
 app.post("/api/auth/login", async (c) => {
-  const body = await c.req.json<{ password: string }>();
-  const token = await login(body.password, c.env);
-  if (!token) {
-    return c.json({ error: "invalid password" }, 401);
-  }
-  return c.json({ token });
+  const body = await c.req.json<{ email?: string; password?: string }>();
+  // 老前端可能只传 password → 视为 admin@local 登录
+  const email = (body.email ?? "").trim() || "admin@local";
+  const password = body.password ?? "";
+  const result = await login(email, password, c.env);
+  if ("error" in result) return c.json({ error: result.error }, 401);
+  return c.json({ token: result.token, user: result.user });
 });
 
-// OAuth 回调不需要认证（从第三方跳转回来）
+// 注册（开放）
+app.post("/api/auth/register", async (c) => {
+  const body = await c.req.json<{ email?: string; password?: string }>();
+  const result = await registerUser(body.email ?? "", body.password ?? "", c.env);
+  if ("error" in result) return c.json({ error: result.error }, 400);
+  return c.json({ token: result.token, user: result.user }, 201);
+});
+
+// OAuth 路由（start 子路由内部要登录，callback 不需要）
 app.route("/api/oauth", oauthRoute);
 
 // 以下所有 /api/* 路由需要认证
 app.use("/api/*", authMiddleware());
+
+// 当前用户信息
+app.get("/api/me", (c) => {
+  const user = c.get("user")!;
+  return c.json({ user });
+});
 
 // 路由挂载
 app.route("/api/emails", emailsRoute);
@@ -41,7 +56,7 @@ app.route("/api/accounts", accountsRoute);
 app.route("/api/settings", settingsRoute);
 app.route("/api/keys", apiKeysRoute);
 
-// 公开域名列表（API key 可通过 domains:read 访问，用于外部程序发现可用域名）
+// 公开域名列表（系统级，所有登录用户可见，API key 可通过 domains:read 访问）
 app.get("/api/domains", requireScope("domains:read"), async (c) => {
   const row = await c.env.DB.prepare("SELECT value FROM settings WHERE key = 'EMAIL_DOMAINS'")
     .first<{ value: string }>();
@@ -51,17 +66,19 @@ app.get("/api/domains", requireScope("domains:read"), async (c) => {
   return c.json({ domains });
 });
 
-// 手动触发同步（全部）— 仅限 JWT（管理员操作）
+// 手动触发同步（当前用户的所有账号）— 仅限 JWT
 app.post("/api/sync", requireJwt(), async (c) => {
-  const result = await syncAllAccounts(c.env);
+  const userId = getUserId(c);
+  const result = await syncUserAccounts(c.env, userId);
   return c.json(result);
 });
 
-// 同步单个账号 — 要求 accounts:write（API key 若绑定 provider，会在下面校验）
+// 同步单个账号（属主校验）
 app.post("/api/accounts/:id/sync", requireScope("accounts:write"), async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
-  const account = await c.env.DB.prepare("SELECT * FROM accounts WHERE id = ?")
-    .bind(id)
+  const account = await c.env.DB.prepare("SELECT * FROM accounts WHERE id = ? AND user_id = ?")
+    .bind(id, userId)
     .first<Account>();
 
   if (!account) return c.json({ error: "not found" }, 404);
@@ -71,7 +88,7 @@ app.post("/api/accounts/:id/sync", requireScope("accounts:write"), async (c) => 
   }
   if (account.provider === "domain") return c.json({ error: "domain accounts receive email passively" }, 400);
 
-  const creds = await getOAuthCredentials(c.env);
+  const creds = await getOAuthCredentials(c.env, userId);
   try {
     let synced = 0;
     if (account.provider === "gmail") {
@@ -85,12 +102,12 @@ app.post("/api/accounts/:id/sync", requireScope("accounts:write"), async (c) => 
   }
 });
 
-/** 同步所有 Gmail 和 Outlook 账号 */
-async function syncAllAccounts(env: Env) {
-  const creds = await getOAuthCredentials(env);
+/** 同步单个用户的所有 Gmail/Outlook 账号 */
+async function syncUserAccounts(env: Env, userId: string) {
+  const creds = await getOAuthCredentials(env, userId);
   const accounts = await env.DB.prepare(
-    "SELECT * FROM accounts WHERE provider IN ('gmail', 'outlook')"
-  ).all<Account>();
+    "SELECT * FROM accounts WHERE user_id = ? AND provider IN ('gmail', 'outlook')"
+  ).bind(userId).all<Account>();
 
   const results: { email: string; provider: string; synced: number; error?: string }[] = [];
 
@@ -116,6 +133,35 @@ async function syncAllAccounts(env: Env) {
   return { ok: true, results };
 }
 
+/** 定时任务：遍历所有用户，逐个同步他们的账号 */
+async function syncAllUsers(env: Env) {
+  // 一次性 join 出 (account, user_id)；按 user 分组迭代以每个用户用各自的 OAuth 凭证
+  const accounts = await env.DB.prepare(
+    "SELECT * FROM accounts WHERE provider IN ('gmail', 'outlook') ORDER BY user_id"
+  ).all<Account>();
+
+  const byUser = new Map<string, Account[]>();
+  for (const a of accounts.results) {
+    if (!byUser.has(a.user_id)) byUser.set(a.user_id, []);
+    byUser.get(a.user_id)!.push(a);
+  }
+
+  for (const [userId, userAccounts] of byUser) {
+    const creds = await getOAuthCredentials(env, userId);
+    for (const account of userAccounts) {
+      try {
+        if (account.provider === "gmail") {
+          await syncGmailEmails(account, creds, env.DB);
+        } else if (account.provider === "outlook") {
+          await syncOutlookEmails(account, creds, env.DB);
+        }
+      } catch {
+        // 单个账号同步失败不影响其他
+      }
+    }
+  }
+}
+
 export default {
   fetch: app.fetch,
 
@@ -126,6 +172,6 @@ export default {
 
   // Cron Trigger: 定时轮询 Gmail / Outlook
   async scheduled(_event: ScheduledEvent, env: Env) {
-    await syncAllAccounts(env);
+    await syncAllUsers(env);
   },
 };

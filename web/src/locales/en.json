@@ -12,17 +12,34 @@
     "logout": "Logout"
   },
   "login": {
-    "title": "AnyMail",
-    "description": "Enter your admin password to continue",
+    "title": "Sign in to AnyMail",
+    "description": "Enter your email and password to continue",
+    "email": "Email",
     "password": "Password",
     "signIn": "Sign in",
     "signingIn": "Signing in...",
-    "invalidPassword": "Invalid password",
-    "goReceive": "Receive code with API key"
+    "invalidPassword": "Invalid email or password",
+    "goReceive": "Receive code",
+    "goRegister": "Create account"
+  },
+  "register": {
+    "title": "Create an account",
+    "description": "Sign up to manage your mailboxes",
+    "confirmPassword": "Confirm password",
+    "create": "Create account",
+    "creating": "Creating...",
+    "haveAccount": "Already have an account? Sign in",
+    "errors": {
+      "passwordShort": "Password must be at least 6 characters",
+      "mismatch": "Passwords do not match",
+      "exists": "Email already registered",
+      "generic": "Failed to register"
+    }
   },
   "receive": {
     "title": "Code Receiver",
-    "adminLogin": "Admin login",
+    "login": "Sign in",
+    "register": "Sign up",
     "formTitle": "Fetch latest emails",
     "formDescription": "Paste an API key (with emails:read scope) to fetch emails from the last {{minutes}} minutes. No login required.",
     "fields": {

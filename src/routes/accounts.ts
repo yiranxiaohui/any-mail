@@ -1,11 +1,12 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
-import { requireScope, type ApiKeyContext } from "../auth";
+import { requireScope, getUserId, type ApiKeyContext, type UserContext } from "../auth";
 
-const accounts = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext } }>();
+const accounts = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext; user?: UserContext } }>();
 
 /** 列出邮箱账号（支持分页和搜索） */
 accounts.get("/", requireScope("accounts:read"), async (c) => {
+  const userId = getUserId(c);
   const search = c.req.query("search");
   const providerQuery = c.req.query("provider");
   const tagQuery = c.req.query("tag");
@@ -15,10 +16,10 @@ accounts.get("/", requireScope("accounts:read"), async (c) => {
   const keyProvider = c.get("apiKey")?.provider ?? null;
   const provider = keyProvider ?? providerQuery;
 
-  let sql = "SELECT id, provider, email, expires_at, tag, created_at, updated_at FROM accounts";
-  let countSql = "SELECT COUNT(*) as total FROM accounts";
-  const params: string[] = [];
-  const countParams: string[] = [];
+  let sql = "SELECT id, provider, email, expires_at, tag, created_at, updated_at FROM accounts WHERE user_id = ?";
+  let countSql = "SELECT COUNT(*) as total FROM accounts WHERE user_id = ?";
+  const params: string[] = [userId];
+  const countParams: string[] = [userId];
   const conditions: string[] = [];
 
   if (search) {
@@ -42,9 +43,9 @@ accounts.get("/", requireScope("accounts:read"), async (c) => {
     }
   }
   if (conditions.length > 0) {
-    const where = " WHERE " + conditions.join(" AND ");
-    sql += where;
-    countSql += where;
+    const extra = " AND " + conditions.join(" AND ");
+    sql += extra;
+    countSql += extra;
   }
 
   sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
@@ -63,20 +64,20 @@ accounts.get("/", requireScope("accounts:read"), async (c) => {
 
 /** 列出所有分组（用户创建的 + 有账户占用的），以及每个分组的账户数 */
 accounts.get("/tags", requireScope("accounts:read"), async (c) => {
+  const userId = getUserId(c);
   const keyProvider = c.get("apiKey")?.provider ?? null;
 
-  // 用户创建的空分组（tag_groups）与账户占用的 tag 做并集，用账户表统计数量
-  let countSql = "SELECT tag, COUNT(*) as count FROM accounts";
-  const countParams: string[] = [];
+  let countSql = "SELECT tag, COUNT(*) as count FROM accounts WHERE user_id = ?";
+  const countParams: string[] = [userId];
   if (keyProvider) {
-    countSql += " WHERE provider = ?";
+    countSql += " AND provider = ?";
     countParams.push(keyProvider);
   }
   countSql += " GROUP BY tag";
 
   const [countRows, groupRows] = await c.env.DB.batch([
     c.env.DB.prepare(countSql).bind(...countParams),
-    c.env.DB.prepare("SELECT name FROM tag_groups ORDER BY name"),
+    c.env.DB.prepare("SELECT name FROM tag_groups WHERE user_id = ? ORDER BY name").bind(userId),
   ]);
 
   const countMap = new Map<string, number>();
@@ -99,13 +100,14 @@ accounts.get("/tags", requireScope("accounts:read"), async (c) => {
 
 /** 创建一个空分组 */
 accounts.post("/tags", requireScope("accounts:write"), async (c) => {
+  const userId = getUserId(c);
   const body = await c.req.json<{ name: string }>();
   const name = body.name?.trim();
   if (!name) return c.json({ error: "name required" }, 400);
   if (name.length > 50) return c.json({ error: "name too long" }, 400);
 
   try {
-    await c.env.DB.prepare("INSERT INTO tag_groups (name) VALUES (?)").bind(name).run();
+    await c.env.DB.prepare("INSERT INTO tag_groups (user_id, name) VALUES (?, ?)").bind(userId, name).run();
   } catch (err) {
     // UNIQUE 冲突：分组已存在，直接返回 ok（幂等）
     const msg = err instanceof Error ? err.message : "";
@@ -118,20 +120,20 @@ accounts.post("/tags", requireScope("accounts:write"), async (c) => {
 
 /** 删除分组：从 tag_groups 移除并把落在该分组下的账户 tag 清空 */
 accounts.delete("/tags/:name", requireScope("accounts:write"), async (c) => {
+  const userId = getUserId(c);
   const name = decodeURIComponent(c.req.param("name") ?? "").trim();
   if (!name) return c.json({ error: "name required" }, 400);
 
   await c.env.DB.batch([
-    c.env.DB.prepare("DELETE FROM tag_groups WHERE name = ?").bind(name),
-    c.env.DB.prepare("UPDATE accounts SET tag = NULL, updated_at = datetime('now') WHERE tag = ?").bind(name),
+    c.env.DB.prepare("DELETE FROM tag_groups WHERE user_id = ? AND name = ?").bind(userId, name),
+    c.env.DB.prepare("UPDATE accounts SET tag = NULL, updated_at = datetime('now') WHERE user_id = ? AND tag = ?").bind(userId, name),
   ]);
   return c.json({ ok: true });
 });
 
-/** 重命名分组：tag_groups 和 accounts.tag 同步更新。
- *  若目标名已存在则视为合并（把旧分组的账户并入目标分组，删除旧分组记录）。
- */
+/** 重命名分组 */
 accounts.patch("/tags/:name", requireScope("accounts:write"), async (c) => {
+  const userId = getUserId(c);
   const oldName = decodeURIComponent(c.req.param("name") ?? "").trim();
   const body = await c.req.json<{ name?: string }>();
   const newName = body.name?.trim();
@@ -141,21 +143,20 @@ accounts.patch("/tags/:name", requireScope("accounts:write"), async (c) => {
   if (newName.length > 50) return c.json({ error: "name too long" }, 400);
   if (oldName === newName) return c.json({ ok: true, name: newName });
 
-  const target = await c.env.DB.prepare("SELECT name FROM tag_groups WHERE name = ?").bind(newName).first();
+  const target = await c.env.DB.prepare("SELECT name FROM tag_groups WHERE user_id = ? AND name = ?")
+    .bind(userId, newName).first();
   const merged = !!target;
 
   if (merged) {
-    // 目标分组已存在：把旧分组下的账户都改到新分组名，再删除旧分组记录
     await c.env.DB.batch([
-      c.env.DB.prepare("UPDATE accounts SET tag = ?, updated_at = datetime('now') WHERE tag = ?").bind(newName, oldName),
-      c.env.DB.prepare("DELETE FROM tag_groups WHERE name = ?").bind(oldName),
+      c.env.DB.prepare("UPDATE accounts SET tag = ?, updated_at = datetime('now') WHERE user_id = ? AND tag = ?").bind(newName, userId, oldName),
+      c.env.DB.prepare("DELETE FROM tag_groups WHERE user_id = ? AND name = ?").bind(userId, oldName),
     ]);
   } else {
-    // 目标分组不存在：先登记新名，再迁移账户和清理旧名
     await c.env.DB.batch([
-      c.env.DB.prepare("INSERT OR IGNORE INTO tag_groups (name) VALUES (?)").bind(newName),
-      c.env.DB.prepare("UPDATE accounts SET tag = ?, updated_at = datetime('now') WHERE tag = ?").bind(newName, oldName),
-      c.env.DB.prepare("DELETE FROM tag_groups WHERE name = ?").bind(oldName),
+      c.env.DB.prepare("INSERT OR IGNORE INTO tag_groups (user_id, name) VALUES (?, ?)").bind(userId, newName),
+      c.env.DB.prepare("UPDATE accounts SET tag = ?, updated_at = datetime('now') WHERE user_id = ? AND tag = ?").bind(newName, userId, oldName),
+      c.env.DB.prepare("DELETE FROM tag_groups WHERE user_id = ? AND name = ?").bind(userId, oldName),
     ]);
   }
 
@@ -164,12 +165,13 @@ accounts.patch("/tags/:name", requireScope("accounts:write"), async (c) => {
 
 /** 查询单个账号 */
 accounts.get("/:id", requireScope("accounts:read"), async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const keyProvider = c.get("apiKey")?.provider ?? null;
   const account = await c.env.DB.prepare(
-    "SELECT id, provider, email, password, client_id, refresh_token, expires_at, tag, created_at, updated_at FROM accounts WHERE id = ?"
+    "SELECT id, provider, email, password, client_id, refresh_token, expires_at, tag, created_at, updated_at FROM accounts WHERE id = ? AND user_id = ?"
   )
-    .bind(id)
+    .bind(id, userId)
     .first<{ provider: string }>();
 
   if (!account) return c.json({ error: "not found" }, 404);
@@ -181,6 +183,7 @@ accounts.get("/:id", requireScope("accounts:read"), async (c) => {
 
 /** 创建域名邮箱账号，支持过期时间 */
 accounts.post("/", requireScope("accounts:write"), async (c) => {
+  const userId = getUserId(c);
   // API key 必须绑定 provider=domain 才能创建域名邮箱
   const key = c.get("apiKey");
   if (key && key.provider !== "domain") {
@@ -193,27 +196,26 @@ accounts.post("/", requireScope("accounts:write"), async (c) => {
     return c.json({ error: "invalid email" }, 400);
   }
 
+  // 域名邮件的收件人在系统内必须唯一（投递时只能给一个 user）
   const existing = await c.env.DB.prepare(
     "SELECT id FROM accounts WHERE email = ? AND provider = 'domain'"
   ).bind(email).first();
   if (existing) {
-    return c.json({ error: "account already exists" }, 409);
+    return c.json({ error: "this address is already claimed" }, 409);
   }
 
   const id = crypto.randomUUID();
   const expiresAt = body.expires_at ?? null;
   await c.env.DB.prepare(
-    "INSERT INTO accounts (id, provider, email, expires_at) VALUES (?, 'domain', ?, ?)"
-  ).bind(id, email, expiresAt).run();
+    "INSERT INTO accounts (id, user_id, provider, email, expires_at) VALUES (?, ?, 'domain', ?, ?)"
+  ).bind(id, userId, email, expiresAt).run();
 
   return c.json({ ok: true, account: { id, provider: "domain", email, expires_at: expiresAt } }, 201);
 });
 
-/** 批量导入微软邮箱（outlook/hotmail）
- *  格式：每行一个，字段用 ---- 分隔
- *  账号----密码----ssid----令牌(refresh_token)
- */
+/** 批量导入微软邮箱（outlook/hotmail） */
 accounts.post("/import", requireScope("accounts:write"), async (c) => {
+  const userId = getUserId(c);
   const key = c.get("apiKey");
   if (key && key.provider !== "outlook") {
     return c.json({ error: "api key must be bound to provider=outlook to import accounts" }, 403);
@@ -241,10 +243,8 @@ accounts.post("/import", requireScope("accounts:write"), async (c) => {
     let refreshToken: string;
 
     if (parts.length === 3) {
-      // 格式: 邮箱----client_id----refresh_token
       [email, clientId, refreshToken] = parts as [string, string, string];
     } else {
-      // 格式: 邮箱----密码----client_id----refresh_token
       email = parts[0]!;
       password = parts[1]!;
       clientId = parts[2]!;
@@ -258,10 +258,10 @@ accounts.post("/import", requireScope("accounts:write"), async (c) => {
     const id = crypto.randomUUID();
     stmts.push(
       c.env.DB.prepare(
-        `INSERT INTO accounts (id, provider, email, password, client_id, refresh_token)
-         VALUES (?, 'outlook', ?, ?, ?, ?)
-         ON CONFLICT(email) DO UPDATE SET password=?, client_id=?, refresh_token=?, updated_at=datetime('now')`
-      ).bind(id, email.toLowerCase(), password || null, clientId, refreshToken, password || null, clientId, refreshToken)
+        `INSERT INTO accounts (id, user_id, provider, email, password, client_id, refresh_token)
+         VALUES (?, ?, 'outlook', ?, ?, ?, ?)
+         ON CONFLICT(user_id, provider, email) DO UPDATE SET password=?, client_id=?, refresh_token=?, updated_at=datetime('now')`
+      ).bind(id, userId, email.toLowerCase(), password || null, clientId, refreshToken, password || null, clientId, refreshToken)
     );
     results.push({ email, status: "ok" });
   }
@@ -278,16 +278,18 @@ accounts.post("/import", requireScope("accounts:write"), async (c) => {
   return c.json({ ok: true, total: lines.length, success, results });
 });
 
-async function assertKeyProviderMatches(
-  c: { env: Env; get: (k: string) => ApiKeyContext | undefined },
+async function assertAccountOwned(
+  c: { env: Env; get: (k: string) => ApiKeyContext | UserContext | undefined },
   id: string,
+  userId: string,
 ): Promise<Response | null> {
-  const key = c.get("apiKey");
-  if (!key?.provider) return null;
-  const row = await c.env.DB.prepare("SELECT provider FROM accounts WHERE id = ?")
-    .bind(id).first<{ provider: string }>();
-  if (!row) return new Response(JSON.stringify({ error: "not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
-  if (row.provider !== key.provider) {
+  const row = await c.env.DB.prepare("SELECT provider, user_id FROM accounts WHERE id = ?")
+    .bind(id).first<{ provider: string; user_id: string }>();
+  if (!row || row.user_id !== userId) {
+    return new Response(JSON.stringify({ error: "not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+  }
+  const key = c.get("apiKey") as ApiKeyContext | undefined;
+  if (key?.provider && row.provider !== key.provider) {
     return new Response(JSON.stringify({ error: "not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
   }
   return null;
@@ -295,8 +297,9 @@ async function assertKeyProviderMatches(
 
 /** 编辑账号信息 */
 accounts.patch("/:id", requireScope("accounts:write"), async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id")!;
-  const guard = await assertKeyProviderMatches(c, id);
+  const guard = await assertAccountOwned(c, id, userId);
   if (guard) return guard;
 
   const body = await c.req.json<{ email?: string; password?: string | null; expires_at?: string | null; client_id?: string | null; refresh_token?: string | null; tag?: string | null }>();
@@ -336,9 +339,10 @@ accounts.patch("/:id", requireScope("accounts:write"), async (c) => {
 
   fields.push("updated_at = datetime('now')");
   values.push(id);
+  values.push(userId);
 
   await c.env.DB.prepare(
-    `UPDATE accounts SET ${fields.join(", ")} WHERE id = ?`
+    `UPDATE accounts SET ${fields.join(", ")} WHERE id = ? AND user_id = ?`
   ).bind(...values).run();
 
   return c.json({ ok: true });
@@ -346,19 +350,19 @@ accounts.patch("/:id", requireScope("accounts:write"), async (c) => {
 
 /** 用账号密码重新获取 refresh_token (ROPC) */
 accounts.post("/:id/reauth", requireScope("accounts:write"), async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id")!;
-  const guard = await assertKeyProviderMatches(c, id);
+  const guard = await assertAccountOwned(c, id, userId);
   if (guard) return guard;
 
   const account = await c.env.DB.prepare(
-    "SELECT id, email, password, client_id FROM accounts WHERE id = ?"
-  ).bind(id).first<{ id: string; email: string; password: string | null; client_id: string | null }>();
+    "SELECT id, email, password, client_id FROM accounts WHERE id = ? AND user_id = ?"
+  ).bind(id, userId).first<{ id: string; email: string; password: string | null; client_id: string | null }>();
 
   if (!account) return c.json({ error: "not found" }, 404);
   if (!account.password) return c.json({ error: "no password stored for this account" }, 400);
   if (!account.client_id) return c.json({ error: "no client_id stored for this account" }, 400);
 
-  // 个人账号用 /consumers，企业账号用 /organizations
   const personalDomains = ["hotmail.com", "outlook.com", "live.com", "msn.com"];
   const domain = account.email.split("@")[1]?.toLowerCase() ?? "";
   const tenant = personalDomains.includes(domain) ? "consumers" : "organizations";
@@ -390,14 +394,15 @@ accounts.post("/:id/reauth", requireScope("accounts:write"), async (c) => {
   const expiresAt = Date.now() + (token.expires_in ?? 3600) * 1000;
 
   await c.env.DB.prepare(
-    "UPDATE accounts SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = datetime('now') WHERE id = ?"
-  ).bind(token.access_token, token.refresh_token ?? "", expiresAt, id).run();
+    "UPDATE accounts SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?"
+  ).bind(token.access_token, token.refresh_token ?? "", expiresAt, id, userId).run();
 
   return c.json({ ok: true, email: account.email });
 });
 
-/** 批量设置标签（支持顺便新建分组） */
+/** 批量设置标签 */
 accounts.post("/bulk-tag", requireScope("accounts:write"), async (c) => {
+  const userId = getUserId(c);
   const body = await c.req.json<{ ids: string[]; tag: string | null }>();
   if (!Array.isArray(body.ids) || body.ids.length === 0) {
     return c.json({ error: "ids required" }, 400);
@@ -409,8 +414,8 @@ accounts.post("/bulk-tag", requireScope("accounts:write"), async (c) => {
   const keyProvider = key?.provider ?? null;
 
   const placeholders = body.ids.map(() => "?").join(",");
-  let sql = `UPDATE accounts SET tag = ?, updated_at = datetime('now') WHERE id IN (${placeholders})`;
-  const values: (string | null)[] = [tag, ...body.ids];
+  let sql = `UPDATE accounts SET tag = ?, updated_at = datetime('now') WHERE user_id = ? AND id IN (${placeholders})`;
+  const values: (string | null)[] = [tag, userId, ...body.ids];
   if (keyProvider) {
     sql += " AND provider = ?";
     values.push(keyProvider);
@@ -418,10 +423,9 @@ accounts.post("/bulk-tag", requireScope("accounts:write"), async (c) => {
 
   const res = await c.env.DB.prepare(sql).bind(...values).run();
 
-  // 把目标分组也登记一下（若不存在），让它在 /tags 列表里稳定出现
   if (tag) {
     try {
-      await c.env.DB.prepare("INSERT OR IGNORE INTO tag_groups (name) VALUES (?)").bind(tag).run();
+      await c.env.DB.prepare("INSERT OR IGNORE INTO tag_groups (user_id, name) VALUES (?, ?)").bind(userId, tag).run();
     } catch {
       // 忽略
     }
@@ -432,13 +436,14 @@ accounts.post("/bulk-tag", requireScope("accounts:write"), async (c) => {
 
 /** 删除账号及其所有邮件 */
 accounts.delete("/:id", requireScope("accounts:write"), async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id")!;
-  const guard = await assertKeyProviderMatches(c, id);
+  const guard = await assertAccountOwned(c, id, userId);
   if (guard) return guard;
 
   await c.env.DB.batch([
-    c.env.DB.prepare("DELETE FROM emails WHERE account_id = ?").bind(id),
-    c.env.DB.prepare("DELETE FROM accounts WHERE id = ?").bind(id),
+    c.env.DB.prepare("DELETE FROM emails WHERE account_id = ? AND user_id = ?").bind(id, userId),
+    c.env.DB.prepare("DELETE FROM accounts WHERE id = ? AND user_id = ?").bind(id, userId),
   ]);
   return c.json({ ok: true });
 });

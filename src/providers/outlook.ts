@@ -21,13 +21,14 @@ export async function generatePkce(): Promise<{ codeVerifier: string; codeChalle
 }
 
 /** 生成 Outlook OAuth 授权链接 */
-export function getOutlookAuthUrl(creds: OAuthCredentials, origin: string): string {
+export function getOutlookAuthUrl(creds: OAuthCredentials, origin: string, state: string): string {
   const params = new URLSearchParams({
     client_id: creds.outlookClientId,
     redirect_uri: `${origin}/api/oauth/outlook/callback`,
     response_type: "code",
     scope: SCOPES,
     response_mode: "query",
+    state,
   });
   return `${MS_AUTH_URL}?${params}`;
 }
@@ -48,7 +49,14 @@ export function getOutlookPkceAuthUrl(clientId: string, origin: string, codeChal
 }
 
 /** PKCE 模式用 authorization code 换取 token（无需 client_secret） */
-export async function handleOutlookPkceCallback(code: string, clientId: string, codeVerifier: string, origin: string, db: D1Database): Promise<Account> {
+export async function handleOutlookPkceCallback(
+  code: string,
+  clientId: string,
+  codeVerifier: string,
+  origin: string,
+  db: D1Database,
+  userId: string,
+): Promise<Account> {
   const tokenRes = await fetch(MS_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -84,12 +92,12 @@ export async function handleOutlookPkceCallback(code: string, clientId: string, 
   const expiresAt = Date.now() + (token.expires_in ?? 3600) * 1000;
 
   await db.prepare(
-    `INSERT INTO accounts (id, provider, email, client_id, access_token, refresh_token, token_expires_at)
-     VALUES (?, 'outlook', ?, ?, ?, ?, ?)
-     ON CONFLICT(email) DO UPDATE SET client_id=?, access_token=?, refresh_token=?, token_expires_at=?, updated_at=datetime('now')`
+    `INSERT INTO accounts (id, user_id, provider, email, client_id, access_token, refresh_token, token_expires_at)
+     VALUES (?, ?, 'outlook', ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, provider, email) DO UPDATE SET client_id=?, access_token=?, refresh_token=?, token_expires_at=?, updated_at=datetime('now')`
   )
     .bind(
-      id, email, clientId,
+      id, userId, email, clientId,
       token.access_token, token.refresh_token ?? "", expiresAt,
       clientId, token.access_token, token.refresh_token ?? "", expiresAt
     )
@@ -97,6 +105,7 @@ export async function handleOutlookPkceCallback(code: string, clientId: string, 
 
   return {
     id,
+    user_id: userId,
     provider: "outlook",
     email,
     access_token: token.access_token,
@@ -112,7 +121,13 @@ export async function handleOutlookPkceCallback(code: string, clientId: string, 
 }
 
 /** 用 authorization code 换取 token */
-export async function handleOutlookCallback(code: string, creds: OAuthCredentials, origin: string, db: D1Database): Promise<Account> {
+export async function handleOutlookCallback(
+  code: string,
+  creds: OAuthCredentials,
+  origin: string,
+  db: D1Database,
+  userId: string,
+): Promise<Account> {
   const tokenRes = await fetch(MS_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -132,7 +147,6 @@ export async function handleOutlookCallback(code: string, creds: OAuthCredential
     expires_in: number;
   };
 
-  // 获取用户邮箱
   const profileRes = await fetch(GRAPH_API, {
     headers: { Authorization: `Bearer ${token.access_token}` },
   });
@@ -143,12 +157,12 @@ export async function handleOutlookCallback(code: string, creds: OAuthCredential
   const expiresAt = Date.now() + token.expires_in * 1000;
 
   await db.prepare(
-    `INSERT INTO accounts (id, provider, email, access_token, refresh_token, token_expires_at)
-     VALUES (?, 'outlook', ?, ?, ?, ?)
-     ON CONFLICT(email) DO UPDATE SET access_token=?, refresh_token=?, token_expires_at=?, updated_at=datetime('now')`
+    `INSERT INTO accounts (id, user_id, provider, email, access_token, refresh_token, token_expires_at)
+     VALUES (?, ?, 'outlook', ?, ?, ?, ?)
+     ON CONFLICT(user_id, provider, email) DO UPDATE SET access_token=?, refresh_token=?, token_expires_at=?, updated_at=datetime('now')`
   )
     .bind(
-      id, email,
+      id, userId, email,
       token.access_token, token.refresh_token, expiresAt,
       token.access_token, token.refresh_token, expiresAt
     )
@@ -156,6 +170,7 @@ export async function handleOutlookCallback(code: string, creds: OAuthCredential
 
   return {
     id,
+    user_id: userId,
     provider: "outlook",
     email,
     access_token: token.access_token,
@@ -176,7 +191,6 @@ async function refreshOutlookToken(account: Account, creds: OAuthCredentials, db
     return account.access_token!;
   }
 
-  // 导入账号自带 client_id（公共客户端，无需 client_secret）
   const useOwnClientId = !!account.client_id;
   const clientId = account.client_id || creds.outlookClientId;
   if (!clientId) {
@@ -186,7 +200,6 @@ async function refreshOutlookToken(account: Account, creds: OAuthCredentials, db
     throw new Error("No refresh_token available for this account.");
   }
 
-  // 导入账号用 graph.microsoft.com/.default scope，OAuth 账号用标准 scope
   const tokenEndpoint = useOwnClientId
     ? "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
     : MS_TOKEN_URL;
@@ -214,7 +227,6 @@ async function refreshOutlookToken(account: Account, creds: OAuthCredentials, db
 
   const expiresAt = Date.now() + (tokenBody.expires_in ?? 3600) * 1000;
 
-  // 微软可能返回新的 refresh_token，一并更新
   if (tokenBody.refresh_token) {
     await db.prepare(
       "UPDATE accounts SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = datetime('now') WHERE id = ?"
@@ -233,7 +245,7 @@ async function refreshOutlookToken(account: Account, creds: OAuthCredentials, db
 }
 
 /** 拉取 Outlook 新邮件 */
-export async function syncOutlookEmails(account: Account, creds: OAuthCredentials, db: D1Database): Promise<number> {
+export async function syncOutlookEmails(account: Account & { user_id: string }, creds: OAuthCredentials, db: D1Database): Promise<number> {
   const accessToken = await refreshOutlookToken(account, creds, db);
   let synced = 0;
 
@@ -265,12 +277,12 @@ export async function syncOutlookEmails(account: Account, creds: OAuthCredential
     const isHtml = msg.body?.contentType === "html";
 
     await db.prepare(
-      // datetime(?) 把 Graph 返回的 ISO "YYYY-MM-DDTHH:MM:SSZ" 归一成 "YYYY-MM-DD HH:MM:SS"（UTC），与 domain/gmail 一致，保证排序和展示可比
-      `INSERT OR IGNORE INTO emails (id, account_id, message_id, provider, from_address, to_address, subject, text_body, html_body, raw_headers, received_at)
-       VALUES (?, ?, ?, 'outlook', ?, ?, ?, ?, ?, '{}', datetime(?))`
+      `INSERT OR IGNORE INTO emails (id, user_id, account_id, message_id, provider, from_address, to_address, subject, text_body, html_body, raw_headers, received_at)
+       VALUES (?, ?, ?, ?, 'outlook', ?, ?, ?, ?, ?, '{}', datetime(?))`
     )
       .bind(
         crypto.randomUUID(),
+        account.user_id,
         account.id,
         msg.id,
         fromAddress,

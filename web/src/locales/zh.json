@@ -12,17 +12,34 @@
     "logout": "退出登录"
   },
   "login": {
-    "title": "AnyMail",
-    "description": "请输入管理员密码以继续",
+    "title": "登录 AnyMail",
+    "description": "输入邮箱与密码继续",
+    "email": "邮箱",
     "password": "密码",
     "signIn": "登录",
     "signingIn": "登录中...",
-    "invalidPassword": "密码错误",
-    "goReceive": "用 API 密钥接码"
+    "invalidPassword": "邮箱或密码错误",
+    "goReceive": "去接码",
+    "goRegister": "注册账号"
+  },
+  "register": {
+    "title": "注册账号",
+    "description": "创建账号即可管理多个邮箱",
+    "confirmPassword": "确认密码",
+    "create": "注册",
+    "creating": "注册中...",
+    "haveAccount": "已有账号？前往登录",
+    "errors": {
+      "passwordShort": "密码至少 6 位",
+      "mismatch": "两次密码不一致",
+      "exists": "该邮箱已注册",
+      "generic": "注册失败"
+    }
   },
   "receive": {
     "title": "接码",
-    "adminLogin": "管理员登录",
+    "login": "登录",
+    "register": "注册",
     "formTitle": "获取最新邮件",
     "formDescription": "粘贴 API 密钥（需要 emails:read 权限），即可获取最近 {{minutes}} 分钟内的邮件。无需登录。",
     "fields": {

@@ -43,21 +43,61 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (res.status === 401) {
     localStorage.removeItem("anymail_token");
+    localStorage.removeItem("anymail_user");
     window.location.href = "/login";
     throw new AuthError();
   }
 
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    // Try to surface the server's error message
+    let msg = `API error: ${res.status}`;
+    try {
+      const body = await res.json() as { error?: string };
+      if (body?.error) msg = body.error;
+    } catch {
+      // not JSON
+    }
+    throw new Error(msg);
+  }
   return res.json();
 }
 
 // Auth
-export function apiLogin(password: string) {
-  return request<{ token: string }>("/api/auth/login", {
+export interface AuthedUser {
+  id: string;
+  role: "admin" | "user";
+  email?: string;
+}
+
+export function apiLogin(email: string, password: string) {
+  return request<{ token: string; user: AuthedUser }>("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ email, password }),
   });
+}
+
+export function apiRegister(email: string, password: string) {
+  return request<{ token: string; user: AuthedUser }>("/api/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function apiMe() {
+  return request<{ user: AuthedUser }>("/api/me");
+}
+
+// OAuth start endpoints — return { url } for the third-party redirect
+export function getGmailAuthUrl() {
+  return request<{ url: string }>("/api/oauth/gmail/start");
+}
+export function getOutlookAuthUrl() {
+  return request<{ url: string }>("/api/oauth/outlook/start");
+}
+export function getOutlookReauthUrl(clientId: string) {
+  return request<{ url: string }>(`/api/oauth/outlook/reauth/start?client_id=${encodeURIComponent(clientId)}`);
 }
 
 // Emails
@@ -222,9 +262,6 @@ export function syncDomainsFromCloudflare() {
   return request<{ ok: boolean; domains: string[] }>("/api/settings/domains/sync", { method: "POST" });
 }
 
-export const gmailAuthUrl = `${BASE}/api/oauth/gmail`;
-export const outlookAuthUrl = `${BASE}/api/oauth/outlook`;
-export const outlookReauthUrl = (clientId: string) => `${BASE}/api/oauth/outlook/reauth?client_id=${encodeURIComponent(clientId)}`;
 
 // API Keys
 export interface ApiKey {

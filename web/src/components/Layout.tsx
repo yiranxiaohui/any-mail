@@ -38,27 +38,27 @@ export default function Layout() {
         </div>
         <Separator />
         <div className="flex flex-col gap-1 p-3 flex-1">
-          <SidebarLink to="/" end>
+          <SidebarLink to="/console" end>
             <IconInbox />
             {t("nav.inbox")}
           </SidebarLink>
-          <SidebarLink to="/compose">
+          <SidebarLink to="/console/compose">
             <IconCompose />
             {t("nav.compose")}
           </SidebarLink>
-          <SidebarLink to="/accounts">
+          <SidebarLink to="/console/accounts">
             <IconAccounts />
             {t("nav.accounts")}
           </SidebarLink>
-          <SidebarLink to="/groups">
+          <SidebarLink to="/console/groups">
             <IconGroups />
             {t("nav.groups")}
           </SidebarLink>
-          <SidebarLink to="/api-keys">
+          <SidebarLink to="/console/api-keys">
             <IconKey />
             {t("nav.apiKeys")}
           </SidebarLink>
-          <SidebarLink to="/settings">
+          <SidebarLink to="/console/settings">
             <IconSettings />
             {t("nav.settings")}
           </SidebarLink>

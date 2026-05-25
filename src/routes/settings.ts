@@ -1,31 +1,41 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
-import { requireJwt, type ApiKeyContext } from "../auth";
+import { requireJwt, requireAdmin, getUserId, type ApiKeyContext, type UserContext } from "../auth";
 
-const ALLOWED_KEYS = [
+// 系统级（仅 admin 可读写）
+const SYSTEM_KEYS = [
   "ADMIN_PASSWORD",
-  "RESEND_API_KEY",
   "EMAIL_DOMAINS",
   "CLOUDFLARE_API_TOKEN",
   "CLOUDFLARE_ACCOUNT_ID",
+];
+
+// 用户级（每个用户独立）
+const USER_KEYS = [
+  "RESEND_API_KEY",
   "GMAIL_CLIENT_ID",
   "GMAIL_CLIENT_SECRET",
   "OUTLOOK_CLIENT_ID",
   "OUTLOOK_CLIENT_SECRET",
 ];
 
-const settings = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext } }>();
+const settings = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext; user?: UserContext } }>();
 
-// 设置页面（含管理员密码等敏感数据）仅限 JWT
+// 所有设置接口仅限 JWT（拒绝 API key）
 settings.use("*", requireJwt());
 
-/** 获取所有设置（敏感值脱敏） */
+/** 获取设置：用户级 + 系统级（系统级仅 admin 看得到） */
 settings.get("/", async (c) => {
-  const rows = await c.env.DB.prepare("SELECT key, value, updated_at FROM settings")
-    .all<{ key: string; value: string; updated_at: string }>();
-
+  const userId = getUserId(c);
+  const user = c.get("user")!;
   const result: Record<string, { value: string; masked: string; updated_at: string }> = {};
-  for (const row of rows.results) {
+
+  const userRows = await c.env.DB.prepare(
+    "SELECT key, value, updated_at FROM user_settings WHERE user_id = ?"
+  ).bind(userId).all<{ key: string; value: string; updated_at: string }>();
+
+  for (const row of userRows.results) {
+    if (!USER_KEYS.includes(row.key)) continue;
     result[row.key] = {
       value: row.value,
       masked: maskValue(row.key, row.value),
@@ -33,21 +43,45 @@ settings.get("/", async (c) => {
     };
   }
 
+  if (user.role === "admin") {
+    const sysRows = await c.env.DB.prepare("SELECT key, value, updated_at FROM settings").all<{ key: string; value: string; updated_at: string }>();
+    for (const row of sysRows.results) {
+      if (!SYSTEM_KEYS.includes(row.key)) continue;
+      result[row.key] = {
+        value: row.value,
+        masked: maskValue(row.key, row.value),
+        updated_at: row.updated_at,
+      };
+    }
+  }
+
   return c.json({ settings: result });
 });
 
-/** 批量更新设置 */
+/** 批量更新设置 — 用户级写当前 user_settings，系统级要求 admin */
 settings.put("/", async (c) => {
+  const userId = getUserId(c);
+  const user = c.get("user")!;
   const body = await c.req.json<Record<string, string>>();
 
   const stmts = [];
   for (const [key, value] of Object.entries(body)) {
-    if (!ALLOWED_KEYS.includes(key)) continue;
-    stmts.push(
-      c.env.DB.prepare(
-        "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')"
-      ).bind(key, value, value)
-    );
+    if (USER_KEYS.includes(key)) {
+      stmts.push(
+        c.env.DB.prepare(
+          "INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (?, ?, ?, datetime('now')) ON CONFLICT(user_id, key) DO UPDATE SET value = ?, updated_at = datetime('now')"
+        ).bind(userId, key, value, value)
+      );
+    } else if (SYSTEM_KEYS.includes(key)) {
+      if (user.role !== "admin") {
+        return c.json({ error: `system setting ${key} requires admin` }, 403);
+      }
+      stmts.push(
+        c.env.DB.prepare(
+          "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')"
+        ).bind(key, value, value)
+      );
+    }
   }
 
   if (stmts.length > 0) {
@@ -57,7 +91,7 @@ settings.put("/", async (c) => {
   return c.json({ ok: true });
 });
 
-/** 获取已配置的域名列表（从 DB 读取） */
+/** 获取已配置的域名列表（admin 配置，所有用户可见用于创建账号） */
 settings.get("/domains", async (c) => {
   const row = await c.env.DB.prepare("SELECT value FROM settings WHERE key = 'EMAIL_DOMAINS'")
     .first<{ value: string }>();
@@ -72,8 +106,8 @@ settings.get("/domains", async (c) => {
   return c.json({ domains });
 });
 
-/** 从 Cloudflare API 同步域名到 EMAIL_DOMAINS 配置 */
-settings.post("/domains/sync", async (c) => {
+/** 从 Cloudflare API 同步域名到 EMAIL_DOMAINS 配置 — admin only */
+settings.post("/domains/sync", requireAdmin(), async (c) => {
   const rows = await c.env.DB.prepare(
     "SELECT key, value FROM settings WHERE key IN ('CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID')"
   ).all<{ key: string; value: string }>();
@@ -105,7 +139,6 @@ settings.post("/domains/sync", async (c) => {
   for (const zone of data.result ?? []) {
     allDomains.push(zone.name);
 
-    // 提取子域
     try {
       const dnsRes = await fetch(
         `https://api.cloudflare.com/client/v4/zones/${zone.id}/dns_records?type=MX&per_page=100`,
@@ -125,7 +158,6 @@ settings.post("/domains/sync", async (c) => {
     } catch {}
   }
 
-  // 保存到 DB
   const value = allDomains.join(",");
   await c.env.DB.prepare(
     "INSERT INTO settings (key, value, updated_at) VALUES ('EMAIL_DOMAINS', ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')"
