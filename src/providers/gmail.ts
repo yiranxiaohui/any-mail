@@ -53,13 +53,21 @@ export async function handleGmailCallback(
   });
   const profile = (await profileRes.json()) as { emailAddress: string; historyId: string };
 
-  const id = crypto.randomUUID();
+  // Cross-user collision guard: accounts.email is globally UNIQUE
+  const existing = await db.prepare("SELECT id, user_id FROM accounts WHERE email = ?")
+    .bind(profile.emailAddress)
+    .first<{ id: string; user_id: string }>();
+  if (existing && existing.user_id !== userId) {
+    throw new Error(`The mailbox ${profile.emailAddress} is already connected by another user`);
+  }
+
+  const id = existing?.id ?? crypto.randomUUID();
   const expiresAt = Date.now() + token.expires_in * 1000;
 
   await db.prepare(
     `INSERT INTO accounts (id, user_id, provider, email, access_token, refresh_token, token_expires_at, last_sync_history_id)
      VALUES (?, ?, 'gmail', ?, ?, ?, ?, ?)
-     ON CONFLICT(user_id, provider, email) DO UPDATE SET access_token=?, refresh_token=?, token_expires_at=?, last_sync_history_id=?, updated_at=datetime('now')`
+     ON CONFLICT(email) DO UPDATE SET access_token=?, refresh_token=?, token_expires_at=?, last_sync_history_id=?, updated_at=datetime('now')`
   )
     .bind(
       id, userId, profile.emailAddress,

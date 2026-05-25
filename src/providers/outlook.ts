@@ -88,13 +88,20 @@ export async function handleOutlookPkceCallback(
   const profile = (await profileRes.json()) as { mail?: string; userPrincipalName: string };
   const email = (profile.mail ?? profile.userPrincipalName).toLowerCase();
 
-  const id = crypto.randomUUID();
+  const existing = await db.prepare("SELECT id, user_id FROM accounts WHERE email = ?")
+    .bind(email)
+    .first<{ id: string; user_id: string }>();
+  if (existing && existing.user_id !== userId) {
+    throw new Error(`The mailbox ${email} is already connected by another user`);
+  }
+
+  const id = existing?.id ?? crypto.randomUUID();
   const expiresAt = Date.now() + (token.expires_in ?? 3600) * 1000;
 
   await db.prepare(
     `INSERT INTO accounts (id, user_id, provider, email, client_id, access_token, refresh_token, token_expires_at)
      VALUES (?, ?, 'outlook', ?, ?, ?, ?, ?)
-     ON CONFLICT(user_id, provider, email) DO UPDATE SET client_id=?, access_token=?, refresh_token=?, token_expires_at=?, updated_at=datetime('now')`
+     ON CONFLICT(email) DO UPDATE SET client_id=?, access_token=?, refresh_token=?, token_expires_at=?, updated_at=datetime('now')`
   )
     .bind(
       id, userId, email, clientId,
@@ -153,13 +160,20 @@ export async function handleOutlookCallback(
   const profile = (await profileRes.json()) as { mail?: string; userPrincipalName: string };
   const email = profile.mail ?? profile.userPrincipalName;
 
-  const id = crypto.randomUUID();
+  const existing = await db.prepare("SELECT id, user_id FROM accounts WHERE email = ?")
+    .bind(email)
+    .first<{ id: string; user_id: string }>();
+  if (existing && existing.user_id !== userId) {
+    throw new Error(`The mailbox ${email} is already connected by another user`);
+  }
+
+  const id = existing?.id ?? crypto.randomUUID();
   const expiresAt = Date.now() + token.expires_in * 1000;
 
   await db.prepare(
     `INSERT INTO accounts (id, user_id, provider, email, access_token, refresh_token, token_expires_at)
      VALUES (?, ?, 'outlook', ?, ?, ?, ?)
-     ON CONFLICT(user_id, provider, email) DO UPDATE SET access_token=?, refresh_token=?, token_expires_at=?, updated_at=datetime('now')`
+     ON CONFLICT(email) DO UPDATE SET access_token=?, refresh_token=?, token_expires_at=?, updated_at=datetime('now')`
   )
     .bind(
       id, userId, email,

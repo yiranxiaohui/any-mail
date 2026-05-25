@@ -8,4 +8,4 @@ crons = ["*/1 * * * *"]  # 每分钟轮询一次
 [[d1_databases]]
 binding = "DB"
 database_name = "any-mail-db"
-database_id = "placeholder-replace-after-creation"
+database_id = "e29da149-96b3-4f77-a864-9fc26338e3d3"

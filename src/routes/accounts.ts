@@ -228,7 +228,6 @@ accounts.post("/import", requireScope("accounts:write"), async (c) => {
 
   const lines = body.text.trim().split("\n").filter((l) => l.trim());
   const results: { email: string; status: string }[] = [];
-  const stmts: D1PreparedStatement[] = [];
 
   for (const line of lines) {
     const parts = line.split("----").map((s) => s.trim());
@@ -255,22 +254,25 @@ accounts.post("/import", requireScope("accounts:write"), async (c) => {
       continue;
     }
 
-    const id = crypto.randomUUID();
-    stmts.push(
-      c.env.DB.prepare(
+    const lowered = email.toLowerCase();
+    // accounts.email is globally UNIQUE — reject if claimed by another user
+    const existing = await c.env.DB.prepare("SELECT id, user_id FROM accounts WHERE email = ?")
+      .bind(lowered).first<{ id: string; user_id: string }>();
+    if (existing && existing.user_id !== userId) {
+      results.push({ email, status: "claimed by another user" });
+      continue;
+    }
+
+    try {
+      const id = existing?.id ?? crypto.randomUUID();
+      await c.env.DB.prepare(
         `INSERT INTO accounts (id, user_id, provider, email, password, client_id, refresh_token)
          VALUES (?, ?, 'outlook', ?, ?, ?, ?)
-         ON CONFLICT(user_id, provider, email) DO UPDATE SET password=?, client_id=?, refresh_token=?, updated_at=datetime('now')`
-      ).bind(id, userId, email.toLowerCase(), password || null, clientId, refreshToken, password || null, clientId, refreshToken)
-    );
-    results.push({ email, status: "ok" });
-  }
-
-  if (stmts.length > 0) {
-    try {
-      await c.env.DB.batch(stmts);
+         ON CONFLICT(email) DO UPDATE SET password=?, client_id=?, refresh_token=?, updated_at=datetime('now')`
+      ).bind(id, userId, lowered, password || null, clientId, refreshToken, password || null, clientId, refreshToken).run();
+      results.push({ email, status: "ok" });
     } catch (err) {
-      return c.json({ error: err instanceof Error ? err.message : "batch insert failed" }, 500);
+      results.push({ email, status: err instanceof Error ? err.message : "insert failed" });
     }
   }
 
