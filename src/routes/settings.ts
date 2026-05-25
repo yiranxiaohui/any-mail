@@ -8,6 +8,7 @@ const SYSTEM_KEYS = [
   "EMAIL_DOMAINS",
   "CLOUDFLARE_API_TOKEN",
   "CLOUDFLARE_ACCOUNT_ID",
+  "SHARED_INBOX_DOMAIN",
 ];
 
 // 用户级（每个用户独立）

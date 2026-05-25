@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Env, Account } from "./types";
-import { login, registerUser, authMiddleware, requireJwt, requireScope, getUserId, type ApiKeyContext, type UserContext } from "./auth";
+import { login, registerUser, authMiddleware, requireJwt, requireScope, getUserId, ensureRelayToken, type ApiKeyContext, type UserContext } from "./auth";
 import { handleDomainEmail } from "./providers/domain";
 import { syncGmailEmails } from "./providers/gmail";
 import { syncOutlookEmails } from "./providers/outlook";
@@ -45,10 +45,14 @@ app.route("/api/oauth", oauthRoute);
 // 以下所有 /api/* 路由需要认证
 app.use("/api/*", authMiddleware());
 
-// 当前用户信息
-app.get("/api/me", (c) => {
+// 当前用户信息（含 relay_token + 共享域名，用于 UI 展示）
+app.get("/api/me", async (c) => {
   const user = c.get("user")!;
-  return c.json({ user });
+  const relay_token = await ensureRelayToken(c.env.DB, user.id);
+  const row = await c.env.DB.prepare("SELECT value FROM settings WHERE key = 'SHARED_INBOX_DOMAIN'")
+    .first<{ value: string }>();
+  const shared_inbox_domain = (row?.value ?? "").trim().toLowerCase() || null;
+  return c.json({ user: { ...user, relay_token }, shared_inbox_domain });
 });
 
 // 路由挂载

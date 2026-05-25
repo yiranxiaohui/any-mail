@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { getUserDomains, addUserDomain, deleteUserDomain, type UserDomain } from "@/lib/api";
+import { getUserDomains, addUserDomain, deleteUserDomain, apiMe, type UserDomain, type MeResponse } from "@/lib/api";
 
 export default function Domains() {
   const { t } = useTranslation();
@@ -13,12 +13,14 @@ export default function Domains() {
   const [loading, setLoading] = useState(true);
   const [newDomain, setNewDomain] = useState("");
   const [adding, setAdding] = useState(false);
+  const [me, setMe] = useState<MeResponse | null>(null);
 
   const refresh = async () => {
     setLoading(true);
     try {
-      const data = await getUserDomains();
-      setDomains(data.domains);
+      const [domainsData, meData] = await Promise.all([getUserDomains(), apiMe()]);
+      setDomains(domainsData.domains);
+      setMe(meData);
     } finally {
       setLoading(false);
     }
@@ -56,8 +58,65 @@ export default function Domains() {
     }
   };
 
+  const copy = async (text: string, msg?: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(msg ?? t("domains.copied"));
+    } catch {
+      toast.error(t("domains.copyFailed"));
+    }
+  };
+
+  const sharedDomain = me?.shared_inbox_domain ?? null;
+  const token = me?.user.relay_token ?? null;
+  const relayAddr = sharedDomain && token ? `relay-${token}@${sharedDomain}` : null;
+  const suffixExample = sharedDomain && token ? `anything-${token}@${sharedDomain}` : null;
+
   return (
     <div className="space-y-4">
+      {/* Shared inbox (works without DNS setup on user's side) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("domains.sharedTitle")}</CardTitle>
+          <CardDescription>{t("domains.sharedDescription")}</CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent className="space-y-4 pt-4">
+          {!sharedDomain ? (
+            <p className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 p-3 text-xs text-muted-foreground">
+              {t("domains.sharedNotConfigured")}
+            </p>
+          ) : (
+            <>
+              {/* Suffix pattern */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">{t("domains.suffixLabel")}</label>
+                <div className="flex gap-2">
+                  <Input readOnly value={`*-${token}@${sharedDomain}`} className="font-mono" />
+                  <Button type="button" variant="outline" onClick={() => copy(suffixExample!, t("domains.copiedExample"))}>
+                    {t("domains.copyExample")}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">{t("domains.suffixHint", { example: suffixExample })}</p>
+              </div>
+
+              {/* Relay forward */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">{t("domains.relayLabel")}</label>
+                <div className="flex gap-2">
+                  <Input readOnly value={relayAddr!} className="font-mono" />
+                  <Button type="button" variant="outline" onClick={() => copy(relayAddr!)}>
+                    {t("domains.copy")}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">{t("domains.relayHint")}</p>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Custom domains (user's own zones) */}
       <Card>
         <CardHeader>
           <CardTitle>{t("domains.title")}</CardTitle>

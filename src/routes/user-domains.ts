@@ -34,12 +34,18 @@ userDomains.post("/", async (c) => {
     return c.json({ error: "domain already claimed by another user" }, 409);
   }
 
-  // 与 admin 全局 EMAIL_DOMAINS 重合也禁止（避免歧义）
-  const row = await c.env.DB.prepare("SELECT value FROM settings WHERE key = 'EMAIL_DOMAINS'")
-    .first<{ value: string }>();
-  const globalDomains = row?.value ? row.value.split(",").map((d) => d.trim().toLowerCase()).filter(Boolean) : [];
+  // 与 admin 全局 EMAIL_DOMAINS 或 SHARED_INBOX_DOMAIN 重合都禁止（避免歧义）
+  const rows = await c.env.DB.prepare(
+    "SELECT key, value FROM settings WHERE key IN ('EMAIL_DOMAINS', 'SHARED_INBOX_DOMAIN')"
+  ).all<{ key: string; value: string }>();
+  const map = new Map(rows.results.map((r) => [r.key, r.value]));
+  const globalDomains = (map.get("EMAIL_DOMAINS") ?? "").split(",").map((d) => d.trim().toLowerCase()).filter(Boolean);
+  const sharedDomain = (map.get("SHARED_INBOX_DOMAIN") ?? "").trim().toLowerCase();
   if (globalDomains.includes(name)) {
     return c.json({ error: "domain is already available to all users (admin global list)" }, 409);
+  }
+  if (sharedDomain && sharedDomain === name) {
+    return c.json({ error: "this is the shared inbox domain and cannot be claimed" }, 409);
   }
 
   await c.env.DB.prepare(

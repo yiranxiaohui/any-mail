@@ -4,6 +4,7 @@ export interface User {
   id: string;
   role: "admin" | "user";
   email?: string;
+  relay_token?: string;
 }
 
 interface AuthContextType {

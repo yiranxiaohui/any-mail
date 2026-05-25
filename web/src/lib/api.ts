@@ -67,6 +67,12 @@ export interface AuthedUser {
   id: string;
   role: "admin" | "user";
   email?: string;
+  relay_token?: string;
+}
+
+export interface MeResponse {
+  user: AuthedUser;
+  shared_inbox_domain: string | null;
 }
 
 export function apiLogin(email: string, password: string) {
@@ -86,7 +92,7 @@ export function apiRegister(email: string, password: string) {
 }
 
 export function apiMe() {
-  return request<{ user: AuthedUser }>("/api/me");
+  return request<MeResponse>("/api/me");
 }
 
 // OAuth start endpoints — return { url } for the third-party redirect

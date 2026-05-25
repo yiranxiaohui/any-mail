@@ -24,6 +24,34 @@ export interface UserContext {
   role: "admin" | "user";
 }
 
+/** Random short token, 8 chars, lowercase base32-ish */
+export function generateRelayToken(): string {
+  const alphabet = "abcdefghijkmnpqrstuvwxyz23456789"; // omit 0,1,l,o for legibility
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+}
+
+/** Ensure the given user has a relay_token. Returns the (possibly newly created) token. */
+export async function ensureRelayToken(db: D1Database, userId: string): Promise<string> {
+  const row = await db.prepare("SELECT relay_token FROM users WHERE id = ?")
+    .bind(userId).first<{ relay_token: string | null }>();
+  if (row?.relay_token) return row.relay_token;
+
+  // Generate with collision retry
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const token = generateRelayToken();
+    try {
+      await db.prepare("UPDATE users SET relay_token = ? WHERE id = ?")
+        .bind(token, userId).run();
+      return token;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (!/UNIQUE|constraint/i.test(msg)) throw err;
+    }
+  }
+  throw new Error("failed to allocate relay_token after 5 attempts");
+}
+
 export const ADMIN_USER_ID = "admin";
 export const ADMIN_EMAIL = "admin@local";
 
@@ -146,9 +174,23 @@ export async function registerUser(
 
   const id = crypto.randomUUID();
   const hash = await sha256Hex(password);
-  await env.DB.prepare(
-    "INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, 'user')"
-  ).bind(id, normalized, hash).run();
+  // Generate a relay_token with collision retry; loop bound is generous since the keyspace is 32^8.
+  let relayToken = generateRelayToken();
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      await env.DB.prepare(
+        "INSERT INTO users (id, email, password_hash, role, relay_token) VALUES (?, ?, ?, 'user', ?)"
+      ).bind(id, normalized, hash, relayToken).run();
+      break;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (/relay_token/.test(msg)) {
+        relayToken = generateRelayToken();
+        continue;
+      }
+      throw err;
+    }
+  }
 
   const ctx: UserContext = { id, role: "user" };
   const token = await signToken(

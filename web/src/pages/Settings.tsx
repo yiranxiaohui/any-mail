@@ -23,6 +23,7 @@ const GMAIL_FIELDS: FieldConfig[] = [
 const GENERAL_FIELDS: FieldConfig[] = [
   { key: "ADMIN_PASSWORD", labelKey: "settings.fields.adminPassword", placeholderKey: "settings.fields.adminPasswordPlaceholder", sensitive: true },
   { key: "RESEND_API_KEY", labelKey: "settings.fields.resendApiKey", placeholderKey: "settings.fields.resendApiKeyPlaceholder", sensitive: true },
+  { key: "SHARED_INBOX_DOMAIN", labelKey: "settings.fields.sharedInboxDomain", placeholderKey: "settings.fields.sharedInboxDomainPlaceholder", sensitive: false },
 ];
 
 export default function Settings() {
