@@ -23,7 +23,7 @@ export default function Layout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen bg-background">
       <nav className="w-56 border-r bg-card flex flex-col shrink-0">
         <div className="px-5 py-5">
           <div className="flex items-center gap-2">
