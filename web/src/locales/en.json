@@ -75,6 +75,8 @@
     "title": "Code Receiver",
     "login": "Sign in",
     "register": "Sign up",
+    "console": "Console",
+    "logout": "Sign out",
     "formTitle": "Fetch latest emails",
     "formDescription": "Paste an API key (with emails:read scope) to fetch emails from the last {{minutes}} minutes. No login required.",
     "fields": {

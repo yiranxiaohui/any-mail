@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
+import { useAuth } from "@/lib/auth";
 
 function HtmlBodyFrame({ html }: { html: string }) {
   const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif;color:#111;background:#fff;word-wrap:break-word;overflow-wrap:break-word}body{padding:12px}img{max-width:100%;height:auto}</style></head><body>${html}</body></html>`;
@@ -41,6 +42,8 @@ interface ReceivedEmail {
 
 export default function Receive() {
   const { t, i18n } = useTranslation();
+  const { user, logout, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(KEY_STORAGE) ?? "");
   const [to, setTo] = useState(() => localStorage.getItem(TO_STORAGE) ?? "");
   const [codeRegex, setCodeRegex] = useState(() => localStorage.getItem(REGEX_STORAGE) ?? "");
@@ -153,12 +156,39 @@ export default function Receive() {
             <Button variant="ghost" size="sm" onClick={toggleLang}>
               {i18n.language === "zh" ? "English" : "中文"}
             </Button>
-            <Button variant="ghost" size="sm" render={<Link to="/register" />}>
-              {t("receive.register")}
-            </Button>
-            <Button variant="ghost" size="sm" render={<Link to="/login" />}>
-              {t("receive.login")}
-            </Button>
+            {isAuthenticated ? (
+              <>
+                <Button variant="ghost" size="sm" render={<Link to="/console" />}>
+                  {t("receive.console")}
+                </Button>
+                <div className="hidden sm:flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 text-xs">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="7" r="4" />
+                    <path d="M5 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2" />
+                  </svg>
+                  <span className="max-w-[160px] truncate font-medium">{user?.email ?? user?.id ?? ""}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    logout();
+                    navigate("/");
+                  }}
+                >
+                  {t("receive.logout")}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" render={<Link to="/register" />}>
+                  {t("receive.register")}
+                </Button>
+                <Button variant="ghost" size="sm" render={<Link to="/login" />}>
+                  {t("receive.login")}
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>

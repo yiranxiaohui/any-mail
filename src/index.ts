@@ -45,14 +45,17 @@ app.route("/api/oauth", oauthRoute);
 // 以下所有 /api/* 路由需要认证
 app.use("/api/*", authMiddleware());
 
-// 当前用户信息（含 relay_token + 共享域名，用于 UI 展示）
+// 当前用户信息（含 email + relay_token + 共享域名，用于 UI 展示）
 app.get("/api/me", async (c) => {
   const user = c.get("user")!;
   const relay_token = await ensureRelayToken(c.env.DB, user.id);
-  const row = await c.env.DB.prepare("SELECT value FROM settings WHERE key = 'SHARED_INBOX_DOMAIN'")
-    .first<{ value: string }>();
-  const shared_inbox_domain = (row?.value ?? "").trim().toLowerCase() || null;
-  return c.json({ user: { ...user, relay_token }, shared_inbox_domain });
+  const [emailRow, sharedRow] = await c.env.DB.batch([
+    c.env.DB.prepare("SELECT email FROM users WHERE id = ?").bind(user.id),
+    c.env.DB.prepare("SELECT value FROM settings WHERE key = 'SHARED_INBOX_DOMAIN'"),
+  ]);
+  const email = (emailRow?.results[0] as { email: string } | undefined)?.email ?? null;
+  const shared_inbox_domain = ((sharedRow?.results[0] as { value: string } | undefined)?.value ?? "").trim().toLowerCase() || null;
+  return c.json({ user: { ...user, email, relay_token }, shared_inbox_domain });
 });
 
 // 路由挂载

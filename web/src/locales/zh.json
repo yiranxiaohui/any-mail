@@ -75,6 +75,8 @@
     "title": "接码",
     "login": "登录",
     "register": "注册",
+    "console": "控制台",
+    "logout": "退出",
     "formTitle": "获取最新邮件",
     "formDescription": "粘贴 API 密钥（需要 emails:read 权限），即可获取最近 {{minutes}} 分钟内的邮件。无需登录。",
     "fields": {

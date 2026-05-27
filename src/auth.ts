@@ -22,6 +22,7 @@ export interface ApiKeyContext {
 export interface UserContext {
   id: string;
   role: "admin" | "user";
+  email?: string;
 }
 
 /** Random short token, 8 chars, lowercase base32-ish */
@@ -155,7 +156,7 @@ export async function login(
     { uid: ctx.id, role: ctx.role, exp: Date.now() + TOKEN_EXPIRY },
     env.JWT_SECRET,
   );
-  return { token, user: ctx };
+  return { token, user: { ...ctx, email: user.email } };
 }
 
 /** 注册新用户（开放注册） */
@@ -197,7 +198,7 @@ export async function registerUser(
     { uid: id, role: "user", exp: Date.now() + TOKEN_EXPIRY },
     env.JWT_SECRET,
   );
-  return { token, user: ctx };
+  return { token, user: { ...ctx, email: normalized } };
 }
 
 /** 生成一把新的 API key（明文），返回 { plaintext, hash, prefix } */
