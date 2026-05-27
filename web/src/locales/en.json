@@ -91,6 +91,7 @@
     "idle": "Enter an API key and click Fetch to start.",
     "noEmails": "No emails in the last 10 minutes.",
     "noSubject": "(no subject)",
+    "htmlOnly": "HTML-only — click to open",
     "code": "Code",
     "copied": "Copied",
     "copyFailed": "Copy failed",

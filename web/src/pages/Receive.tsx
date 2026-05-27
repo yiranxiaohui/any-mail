@@ -5,7 +5,20 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
+
+function HtmlBodyFrame({ html }: { html: string }) {
+  const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif;color:#111;background:#fff;word-wrap:break-word;overflow-wrap:break-word}body{padding:12px}img{max-width:100%;height:auto}</style></head><body>${html}</body></html>`;
+  return (
+    <iframe
+      srcDoc={srcDoc}
+      sandbox="allow-popups allow-popups-to-escape-sandbox"
+      className="h-[420px] w-full rounded-md border bg-white"
+      title="email-html"
+    />
+  );
+}
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -36,6 +49,7 @@ export default function Receive() {
   const [autoPoll, setAutoPoll] = useState(false);
   const [error, setError] = useState("");
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // 用 ref 持有最新输入，避免轮询定时器闭包
   const inputsRef = useRef({ apiKey, to, codeRegex });
@@ -228,50 +242,103 @@ export default function Receive() {
               {lastFetched ? t("receive.noEmails") : t("receive.idle")}
             </p>
           )}
-          {emails.map((m) => (
-            <Card key={m.id}>
-              <CardContent className="space-y-2">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">
-                      {m.subject || t("receive.noSubject")}
-                    </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {m.from_address} → {m.to_address}
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-xs text-muted-foreground">
-                    {new Date(
-                      m.received_at.includes("T")
-                        ? m.received_at
-                        : m.received_at.replace(" ", "T") + "Z",
-                    ).toLocaleString()}
-                  </div>
-                </div>
-
-                {m.code != null && (
+          {emails.map((m) => {
+            const expanded = expandedId === m.id;
+            const hasHtml = !!m.html_body;
+            const hasText = !!m.text_body;
+            return (
+              <Card key={m.id}>
+                <CardContent className="space-y-2">
                   <button
                     type="button"
-                    onClick={() => copyCode(m.code as string)}
-                    className="block w-full rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-left transition-colors hover:bg-primary/20"
+                    onClick={() => setExpandedId(expanded ? null : m.id)}
+                    className="-mx-1 flex w-full items-start justify-between gap-3 rounded-md px-1 py-0.5 text-left hover:bg-muted/50"
+                    aria-expanded={expanded}
                   >
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      {t("receive.code")}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">
+                        {m.subject || t("receive.noSubject")}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {m.from_address} → {m.to_address}
+                      </div>
                     </div>
-                    <div className="font-mono text-lg font-semibold tracking-wide">
-                      {m.code}
+                    <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                      <span>
+                        {new Date(
+                          m.received_at.includes("T")
+                            ? m.received_at
+                            : m.received_at.replace(" ", "T") + "Z",
+                        ).toLocaleString()}
+                      </span>
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={`transition-transform ${expanded ? "rotate-180" : ""}`}
+                      >
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
                     </div>
                   </button>
-                )}
 
-                {m.text_body && (
-                  <pre className="max-h-40 overflow-y-auto rounded-md bg-muted px-3 py-2 text-xs whitespace-pre-wrap break-words">
-                    {m.text_body}
-                  </pre>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  {m.code != null && (
+                    <button
+                      type="button"
+                      onClick={() => copyCode(m.code as string)}
+                      className="block w-full rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-left transition-colors hover:bg-primary/20"
+                    >
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {t("receive.code")}
+                      </div>
+                      <div className="font-mono text-lg font-semibold tracking-wide">
+                        {m.code}
+                      </div>
+                    </button>
+                  )}
+
+                  {expanded && (
+                    hasHtml ? (
+                      <Tabs defaultValue="html" className="flex flex-col gap-2">
+                        <TabsList>
+                          <TabsTrigger value="html">{t("email.html")}</TabsTrigger>
+                          <TabsTrigger value="text">{t("email.text")}</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="html">
+                          <HtmlBodyFrame html={m.html_body} />
+                        </TabsContent>
+                        <TabsContent value="text">
+                          <pre className="max-h-[420px] overflow-y-auto rounded-md border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap break-words">
+                            {m.text_body || t("email.empty")}
+                          </pre>
+                        </TabsContent>
+                      </Tabs>
+                    ) : (
+                      <pre className="max-h-[420px] overflow-y-auto rounded-md border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap break-words">
+                        {m.text_body || t("email.empty")}
+                      </pre>
+                    )
+                  )}
+
+                  {!expanded && hasText && (
+                    <pre className="max-h-24 overflow-hidden rounded-md bg-muted px-3 py-2 text-xs whitespace-pre-wrap break-words [mask-image:linear-gradient(to_bottom,black,transparent)]">
+                      {m.text_body}
+                    </pre>
+                  )}
+                  {!expanded && !hasText && hasHtml && (
+                    <p className="text-xs text-muted-foreground italic">
+                      {t("receive.htmlOnly")}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </main>
 

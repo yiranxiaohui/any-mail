@@ -91,6 +91,7 @@
     "idle": "输入 API 密钥后点击「获取」开始。",
     "noEmails": "近 10 分钟内没有新邮件。",
     "noSubject": "（无主题）",
+    "htmlOnly": "仅含 HTML 内容 — 点击展开查看",
     "code": "验证码",
     "copied": "已复制",
     "copyFailed": "复制失败",
