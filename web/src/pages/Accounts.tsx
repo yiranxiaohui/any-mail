@@ -846,7 +846,7 @@ export default function Accounts() {
                     </Button>
                   )}
                   <Link
-                    to={`/?account_id=${account.id}`}
+                    to={`/console?account_id=${account.id}`}
                     className="inline-flex items-center justify-center rounded-md px-2.5 h-7 text-[0.8rem] font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                   >
                     {t("accounts.viewInbox")}
