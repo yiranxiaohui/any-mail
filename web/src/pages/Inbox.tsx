@@ -98,7 +98,7 @@ export default function Inbox() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] gap-6">
+    <div className="flex flex-col h-[calc(100dvh-80px)] sm:h-[calc(100dvh-96px)] md:h-[calc(100vh-48px)] gap-6">
       {/* Header */}
       <div className="flex items-center justify-between shrink-0">
         <div>
@@ -122,7 +122,7 @@ export default function Inbox() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 shrink-0">
+      <div className="flex flex-wrap gap-3 shrink-0">
         <select
           value={filterProvider}
           onChange={(e) => { setFilterProvider(e.target.value); setPage(1); }}
@@ -141,7 +141,7 @@ export default function Inbox() {
           itemToStringLabel={accountLabel}
           filter={filterAccountQuery}
         >
-          <Combobox.Trigger className="flex h-8 w-[260px] items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50">
+          <Combobox.Trigger className="flex h-8 w-full sm:w-[260px] items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50">
             <Combobox.Value>
               {(value: string | null) => (
                 <span className="truncate text-left">
@@ -236,18 +236,18 @@ export default function Inbox() {
                 key={email.id}
                 className="flex flex-col gap-1.5 px-5 py-4 hover:bg-muted/50 transition-colors"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
                     <ProviderBadge provider={email.provider} />
                     <span className="text-sm font-semibold truncate">
                       {email.subject || t("inbox.noSubject")}
                     </span>
                   </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap ml-4">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
                     {formatDate(email.received_at)}
                   </span>
                 </div>
-                <div className="flex gap-4 text-xs text-muted-foreground">
+                <div className="flex min-w-0 gap-4 text-xs text-muted-foreground">
                   <span className="truncate">{t("email.from")}: {email.from_address}</span>
                   <span className="truncate">{t("email.to")}: {email.to_address}</span>
                 </div>

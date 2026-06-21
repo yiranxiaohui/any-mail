@@ -113,7 +113,7 @@ export default function Groups() {
   const totalTagged = groups.reduce((sum, g) => sum + g.count, 0);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] gap-6">
+    <div className="flex flex-col h-[calc(100dvh-80px)] sm:h-[calc(100dvh-96px)] md:h-[calc(100vh-48px)] gap-6">
       <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t("groups.title")}</h1>

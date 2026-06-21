@@ -71,7 +71,7 @@ export default function EmailDetail() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-48px)] flex-col gap-3">
+    <div className="flex h-[calc(100dvh-80px)] sm:h-[calc(100dvh-96px)] md:h-[calc(100vh-48px)] flex-col gap-3">
       <div className="flex flex-shrink-0 items-center justify-between">
         <Button variant="ghost" size="sm" onClick={goBack}>
           <svg className="mr-1.5 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

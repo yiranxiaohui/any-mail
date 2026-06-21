@@ -131,7 +131,7 @@ export default function ApiKeys() {
   const isEdit = mode?.kind === "edit";
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] gap-6">
+    <div className="flex flex-col h-[calc(100dvh-80px)] sm:h-[calc(100dvh-96px)] md:h-[calc(100vh-48px)] gap-6">
       <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t("apiKeys.title")}</h1>

@@ -319,7 +319,7 @@ export default function Accounts() {
   const currentPage = Math.min(page, totalPages);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] gap-6">
+    <div className="flex flex-col h-[calc(100dvh-80px)] sm:h-[calc(100dvh-96px)] md:h-[calc(100vh-48px)] gap-6">
       <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t("accounts.title")}</h1>
@@ -633,12 +633,12 @@ export default function Accounts() {
 
       <Card className="flex flex-col min-h-0 flex-1">
         <CardHeader className="shrink-0">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-base">{t("accounts.connectedAccounts")}</CardTitle>
               <CardDescription>{t("accounts.accountCount", { count: total })}</CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <select
                 value={filterProvider}
                 onChange={(e) => { setFilterProvider(e.target.value); setPage(1); }}
@@ -653,7 +653,7 @@ export default function Accounts() {
                 placeholder={t("accounts.searchPlaceholder")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-64"
+                className="w-full sm:w-64"
               />
             </div>
           </div>
@@ -969,7 +969,7 @@ function GroupFilter({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="inline-flex min-w-[200px] items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm hover:bg-muted/40"
+        className="inline-flex w-full sm:w-auto sm:min-w-[200px] items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm hover:bg-muted/40"
       >
         <span className="flex items-center gap-2 truncate">
           <span className="truncate">{currentLabel}</span>
@@ -980,7 +980,7 @@ function GroupFilter({
         </svg>
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-md border bg-popover p-1 shadow-md">
+        <div className="absolute left-0 top-full z-50 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-md border bg-popover p-1 shadow-md">
           <div className="px-1 pb-1">
             <input
               ref={inputRef}
