@@ -319,7 +319,7 @@ export default function Accounts() {
   const currentPage = Math.min(page, totalPages);
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-80px)] sm:h-[calc(100dvh-96px)] md:h-[calc(100vh-48px)] gap-6">
+    <div className="flex flex-col gap-6 md:h-[calc(100vh-48px)]">
       <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t("accounts.title")}</h1>
@@ -631,7 +631,7 @@ export default function Accounts() {
         </DialogContent>
       </Dialog>
 
-      <Card className="flex flex-col min-h-0 flex-1">
+      <Card className="flex flex-col md:min-h-0 md:flex-1">
         <CardHeader className="shrink-0">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -759,22 +759,22 @@ export default function Accounts() {
             <p className="text-xs mt-1">{t("accounts.noAccountsHint")}</p>
           </CardContent>
         ) : (
-          <div className="divide-y overflow-y-auto flex-1 min-h-0">
+          <div className="divide-y md:overflow-y-auto md:flex-1 md:min-h-0">
             {accounts.map((account) => (
-              <div key={account.id} className="flex items-center justify-between px-6 py-4">
-                <div className="flex items-center gap-3">
+              <div key={account.id} className="flex items-center justify-between gap-2 px-4 py-4 sm:px-6">
+                <div className="flex min-w-0 items-center gap-3">
                   <input
                     type="checkbox"
                     className="h-4 w-4 cursor-pointer accent-primary"
                     checked={selectedIds.has(account.id)}
                     onChange={() => toggleSelected(account.id)}
                   />
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
                     <ProviderIcon provider={account.provider} />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{account.email}</span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium break-all">{account.email}</span>
                       <ProviderBadge provider={account.provider} />
                       {account.tag && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
@@ -800,7 +800,7 @@ export default function Accounts() {
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex shrink-0 items-center gap-1">
                   <select
                     value=""
                     onChange={(e) => {

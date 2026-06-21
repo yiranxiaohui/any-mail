@@ -131,7 +131,7 @@ export default function ApiKeys() {
   const isEdit = mode?.kind === "edit";
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-80px)] sm:h-[calc(100dvh-96px)] md:h-[calc(100vh-48px)] gap-6">
+    <div className="flex flex-col gap-6 md:h-[calc(100vh-48px)]">
       <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t("apiKeys.title")}</h1>
@@ -241,7 +241,7 @@ export default function ApiKeys() {
         </DialogContent>
       </Dialog>
 
-      <Card className="flex flex-col min-h-0 flex-1">
+      <Card className="flex flex-col md:min-h-0 md:flex-1">
         <CardHeader className="shrink-0">
           <CardTitle className="text-base">{t("apiKeys.title")}</CardTitle>
           <CardDescription>
@@ -265,7 +265,7 @@ export default function ApiKeys() {
             <p className="text-xs mt-1">{t("apiKeys.emptyHint")}</p>
           </CardContent>
         ) : (
-          <div className="divide-y overflow-y-auto flex-1 min-h-0">
+          <div className="divide-y md:overflow-y-auto md:flex-1 md:min-h-0">
             {keys.map((key) => {
               const scopesList = key.scopes.split(",").filter(Boolean);
               const isExpired = key.expires_at && new Date(key.expires_at) < new Date();

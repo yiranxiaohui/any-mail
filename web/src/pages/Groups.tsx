@@ -113,7 +113,7 @@ export default function Groups() {
   const totalTagged = groups.reduce((sum, g) => sum + g.count, 0);
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-80px)] sm:h-[calc(100dvh-96px)] md:h-[calc(100vh-48px)] gap-6">
+    <div className="flex flex-col gap-6 md:h-[calc(100vh-48px)]">
       <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t("groups.title")}</h1>
@@ -189,7 +189,7 @@ export default function Groups() {
         </DialogContent>
       </Dialog>
 
-      <Card className="flex flex-col min-h-0 flex-1">
+      <Card className="flex flex-col md:min-h-0 md:flex-1">
         <CardHeader className="shrink-0">
           <CardTitle className="text-base">{t("groups.listTitle")}</CardTitle>
           <CardDescription>{t("groups.listDesc", { count: groups.length })}</CardDescription>
@@ -203,7 +203,7 @@ export default function Groups() {
             {t("inbox.loading")}
           </CardContent>
         ) : (
-          <div className="divide-y overflow-y-auto flex-1 min-h-0">
+          <div className="divide-y md:overflow-y-auto md:flex-1 md:min-h-0">
             <GroupRow
               name={t("groups.untagged")}
               count={untaggedCount}

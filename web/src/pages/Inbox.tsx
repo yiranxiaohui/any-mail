@@ -98,7 +98,7 @@ export default function Inbox() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-80px)] sm:h-[calc(100dvh-96px)] md:h-[calc(100vh-48px)] gap-6">
+    <div className="flex flex-col gap-6 md:h-[calc(100vh-48px)]">
       {/* Header */}
       <div className="flex items-center justify-between shrink-0">
         <div>
@@ -228,8 +228,8 @@ export default function Inbox() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="flex flex-col min-h-0 flex-1">
-          <div className="divide-y overflow-y-auto flex-1 min-h-0">
+        <Card className="flex flex-col md:min-h-0 md:flex-1">
+          <div className="divide-y md:overflow-y-auto md:flex-1 md:min-h-0">
             {emails.map((email) => (
               <Link
                 to={`/console/emails/${email.id}`}
