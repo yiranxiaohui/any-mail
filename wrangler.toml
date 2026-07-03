@@ -9,6 +9,9 @@ enabled = true
 enabled = true
 invocation_logs = true
 
+[observability.traces]
+enabled = true
+
 [triggers]
 crons = ["*/1 * * * *"]  # 每分钟轮询一次
 
