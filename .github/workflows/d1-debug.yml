@@ -1,0 +1,40 @@
+name: D1 Debug
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Inspect D1 schema
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "== tables =="
+          bunx wrangler d1 execute any-mail-db --remote --json --command "SELECT name FROM sqlite_master WHERE type='table'" || true
+          echo "== users schema =="
+          bunx wrangler d1 execute any-mail-db --remote --json --command "PRAGMA table_info(users)" || true
+          echo "== users count =="
+          bunx wrangler d1 execute any-mail-db --remote --json --command "SELECT COUNT(*) AS n FROM users" || true
+          echo "== settings count =="
+          bunx wrangler d1 execute any-mail-db --remote --json --command "SELECT COUNT(*) AS n FROM settings" || true
+
+      - name: Tail worker while hitting login
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          (bunx wrangler tail any-mail --format json > tail.log 2>&1 &)
+          sleep 10
+          curl -s -o /dev/null -w 'login status: %{http_code}\n' -X POST https://any-mail.yiranxiaohui.workers.dev/api/auth/login -H 'content-type: application/json' -d '{"email":"admin@local","password":"debug-probe"}'
+          sleep 10
+          echo "== tail output =="
+          cat tail.log || true
