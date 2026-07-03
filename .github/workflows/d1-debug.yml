@@ -13,6 +13,22 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Time Travel info
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "== current bookmark =="
+          bunx wrangler d1 time-travel info any-mail-db --json || true
+          echo "== bookmark at 2026-06-21 (last known good deploy day) =="
+          bunx wrangler d1 time-travel info any-mail-db --timestamp "2026-06-21T12:00:00Z" --json || true
+          echo "== bookmark 30 days ago (2026-06-03) =="
+          bunx wrangler d1 time-travel info any-mail-db --timestamp "2026-06-03T16:00:00Z" --json || true
+          echo "== bookmark 2 days ago =="
+          bunx wrangler d1 time-travel info any-mail-db --timestamp "2026-07-01T16:00:00Z" --json || true
+          echo "== bookmark yesterday =="
+          bunx wrangler d1 time-travel info any-mail-db --timestamp "2026-07-02T16:00:00Z" --json || true
+
       - name: Inspect D1 schema
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
