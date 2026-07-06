@@ -17,6 +17,8 @@ emails.get("/", requireScope("emails:read"), async (c) => {
   // API key 限定 provider 时，覆盖用户传入的 provider
   const keyProvider = c.get("apiKey")?.provider ?? null;
   const provider = keyProvider ?? providerQuery;
+  // API key 限定收件地址时，作为额外的交集条件（不可被请求参数放大）
+  const keyAddress = c.get("apiKey")?.address ?? null;
 
   let sql = "SELECT * FROM emails WHERE user_id = ?";
   let countSql = "SELECT COUNT(*) as total FROM emails WHERE user_id = ?";
@@ -40,6 +42,12 @@ emails.get("/", requireScope("emails:read"), async (c) => {
     countSql += " AND to_address LIKE ?";
     params.push(`%${to}%`);
     countParams.push(`%${to}%`);
+  }
+  if (keyAddress) {
+    sql += " AND to_address LIKE ?";
+    countSql += " AND to_address LIKE ?";
+    params.push(`%${keyAddress}%`);
+    countParams.push(`%${keyAddress}%`);
   }
 
   // 用 datetime() 归一化不同 provider 的时间戳格式（outlook 存 ISO，domain/gmail 存空格分隔），否则字节序会错排
@@ -66,6 +74,7 @@ emails.get("/latest", requireScope("emails:read"), async (c) => {
   const codeRegex = c.req.query("code_regex");
 
   const keyProvider = c.get("apiKey")?.provider ?? null;
+  const keyAddress = c.get("apiKey")?.address ?? null;
 
   let sql = "SELECT * FROM emails WHERE user_id = ?";
   const params: string[] = [userId];
@@ -81,6 +90,10 @@ emails.get("/latest", requireScope("emails:read"), async (c) => {
   if (keyProvider) {
     sql += " AND provider = ?";
     params.push(keyProvider);
+  }
+  if (keyAddress) {
+    sql += " AND to_address LIKE ?";
+    params.push(`%${keyAddress}%`);
   }
   sql += " ORDER BY datetime(received_at) DESC LIMIT ?";
   params.push(String(limit));
@@ -112,13 +125,17 @@ emails.get("/:id", requireScope("emails:read"), async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
   const keyProvider = c.get("apiKey")?.provider ?? null;
+  const keyAddress = c.get("apiKey")?.address ?? null;
 
   const email = await c.env.DB.prepare("SELECT * FROM emails WHERE id = ? AND user_id = ?")
     .bind(id, userId)
-    .first<{ provider: string }>();
+    .first<{ provider: string; to_address: string }>();
 
   if (!email) return c.json({ error: "not found" }, 404);
   if (keyProvider && email.provider !== keyProvider) {
+    return c.json({ error: "not found" }, 404);
+  }
+  if (keyAddress && !email.to_address?.includes(keyAddress)) {
     return c.json({ error: "not found" }, 404);
   }
   return c.json(email);
@@ -190,11 +207,13 @@ emails.delete("/:id", requireScope("emails:delete"), async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
   const keyProvider = c.get("apiKey")?.provider ?? null;
+  const keyAddress = c.get("apiKey")?.address ?? null;
 
-  const row = await c.env.DB.prepare("SELECT provider FROM emails WHERE id = ? AND user_id = ?")
-    .bind(id, userId).first<{ provider: string }>();
+  const row = await c.env.DB.prepare("SELECT provider, to_address FROM emails WHERE id = ? AND user_id = ?")
+    .bind(id, userId).first<{ provider: string; to_address: string }>();
   if (!row) return c.json({ error: "not found" }, 404);
   if (keyProvider && row.provider !== keyProvider) return c.json({ error: "not found" }, 404);
+  if (keyAddress && !row.to_address?.includes(keyAddress)) return c.json({ error: "not found" }, 404);
 
   await c.env.DB.prepare("DELETE FROM emails WHERE id = ? AND user_id = ?").bind(id, userId).run();
   return c.json({ ok: true });
