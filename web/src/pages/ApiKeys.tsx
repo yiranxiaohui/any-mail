@@ -26,6 +26,7 @@ export default function ApiKeys() {
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState<string[]>(["emails:read"]);
   const [provider, setProvider] = useState<string>("");
+  const [address, setAddress] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
 
   // plaintext reveal (create only)
@@ -49,6 +50,7 @@ export default function ApiKeys() {
     setName("");
     setScopes(["emails:read"]);
     setProvider("");
+    setAddress("");
     setExpiresAt("");
   };
 
@@ -61,6 +63,7 @@ export default function ApiKeys() {
     setName(key.name);
     setScopes(key.scopes.split(",").filter(Boolean));
     setProvider(key.provider ?? "");
+    setAddress(key.address ?? "");
     setExpiresAt(key.expires_at ? key.expires_at.slice(0, 16) : "");
     setMode({ kind: "edit", id: key.id });
   };
@@ -82,6 +85,7 @@ export default function ApiKeys() {
         name: name.trim(),
         scopes,
         provider: provider || null,
+        address: address.trim() || null,
         expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
       };
       if (mode.kind === "create") {
@@ -196,6 +200,15 @@ export default function ApiKeys() {
               </select>
             </div>
             <div className="space-y-1.5">
+              <label className="text-sm font-medium">{t("apiKeys.address")}</label>
+              <Input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder={t("apiKeys.addressPlaceholder")}
+              />
+              <p className="text-xs text-muted-foreground">{t("apiKeys.addressHint")}</p>
+            </div>
+            <div className="space-y-1.5">
               <label className="text-sm font-medium">{t("apiKeys.expiresAt")}</label>
               <Input
                 type="datetime-local"
@@ -280,6 +293,11 @@ export default function ApiKeys() {
                       <span className="text-xs rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
                         {providerLabel(key.provider)}
                       </span>
+                      {key.address && (
+                        <span className="text-xs rounded-full bg-muted px-2 py-0.5 text-muted-foreground font-mono">
+                          → {key.address}
+                        </span>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {scopesList.map((s) => (

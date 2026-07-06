@@ -23,7 +23,7 @@ keys.use("*", requireJwt());
 keys.get("/", async (c) => {
   const userId = getUserId(c);
   const rows = await c.env.DB.prepare(
-    "SELECT id, name, key_prefix, scopes, provider, expires_at, last_used_at, created_at FROM api_keys WHERE user_id = ? ORDER BY created_at DESC"
+    "SELECT id, name, key_prefix, scopes, provider, address, expires_at, last_used_at, created_at FROM api_keys WHERE user_id = ? ORDER BY created_at DESC"
   ).bind(userId).all();
   return c.json({ keys: rows.results });
 });
@@ -35,6 +35,7 @@ keys.post("/", async (c) => {
     name?: string;
     scopes?: string[];
     provider?: string | null;
+    address?: string | null;
     expires_at?: string | null;
   }>();
 
@@ -49,14 +50,16 @@ keys.post("/", async (c) => {
     return c.json({ error: "invalid provider" }, 400);
   }
 
+  const address = body.address?.trim() || null;
+
   const expiresAt = body.expires_at ?? null;
   const { plaintext, hash, prefix } = await generateApiKey();
   const id = crypto.randomUUID();
 
   await c.env.DB.prepare(
-    `INSERT INTO api_keys (id, user_id, name, key_hash, key_prefix, scopes, provider, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(id, userId, name, hash, prefix, scopes.join(","), provider, expiresAt).run();
+    `INSERT INTO api_keys (id, user_id, name, key_hash, key_prefix, scopes, provider, address, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(id, userId, name, hash, prefix, scopes.join(","), provider, address, expiresAt).run();
 
   return c.json({
     ok: true,
@@ -66,6 +69,7 @@ keys.post("/", async (c) => {
       key_prefix: prefix,
       scopes,
       provider,
+      address,
       expires_at: expiresAt,
     },
     plaintext,
@@ -80,6 +84,7 @@ keys.patch("/:id", async (c) => {
     name?: string;
     scopes?: string[];
     provider?: string | null;
+    address?: string | null;
     expires_at?: string | null;
   }>();
 
@@ -103,6 +108,10 @@ keys.patch("/:id", async (c) => {
     }
     fields.push("provider = ?");
     values.push(body.provider);
+  }
+  if (body.address !== undefined) {
+    fields.push("address = ?");
+    values.push(body.address?.trim() || null);
   }
   if (body.expires_at !== undefined) {
     fields.push("expires_at = ?");

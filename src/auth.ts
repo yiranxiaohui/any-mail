@@ -17,6 +17,7 @@ export interface ApiKeyContext {
   user_id: string;
   scopes: string[];
   provider: string | null;
+  address: string | null;
 }
 
 export interface UserContext {
@@ -219,13 +220,14 @@ interface ApiKeyRow {
   user_id: string;
   scopes: string;
   provider: string | null;
+  address: string | null;
   expires_at: string | null;
 }
 
 async function lookupApiKey(db: D1Database, plaintext: string): Promise<ApiKeyContext | null> {
   const hash = await sha256Hex(plaintext);
   const row = await db.prepare(
-    "SELECT id, user_id, scopes, provider, expires_at FROM api_keys WHERE key_hash = ?"
+    "SELECT id, user_id, scopes, provider, address, expires_at FROM api_keys WHERE key_hash = ?"
   ).bind(hash).first<ApiKeyRow>();
 
   if (!row) return null;
@@ -240,6 +242,7 @@ async function lookupApiKey(db: D1Database, plaintext: string): Promise<ApiKeyCo
     user_id: row.user_id,
     scopes: row.scopes.split(",").map((s) => s.trim()).filter(Boolean),
     provider: row.provider,
+    address: row.address,
   };
 }
 
