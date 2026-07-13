@@ -129,6 +129,43 @@ keys.patch("/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+/** 轮换 API key：生成新密文并立即替换，旧密钥即刻失效；新明文仅本次响应返回 */
+keys.post("/:id/rotate", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+
+  const row = await c.env.DB.prepare(
+    "SELECT id, name, scopes, provider, address, expires_at FROM api_keys WHERE id = ? AND user_id = ?"
+  ).bind(id, userId).first<{
+    id: string;
+    name: string;
+    scopes: string;
+    provider: string | null;
+    address: string | null;
+    expires_at: string | null;
+  }>();
+  if (!row) return c.json({ error: "key not found" }, 404);
+
+  const { plaintext, hash, prefix } = await generateApiKey();
+  await c.env.DB.prepare(
+    "UPDATE api_keys SET key_hash = ?, key_prefix = ? WHERE id = ? AND user_id = ?"
+  ).bind(hash, prefix, id, userId).run();
+
+  return c.json({
+    ok: true,
+    key: {
+      id: row.id,
+      name: row.name,
+      key_prefix: prefix,
+      scopes: row.scopes.split(",").filter(Boolean),
+      provider: row.provider,
+      address: row.address,
+      expires_at: row.expires_at,
+    },
+    plaintext,
+  });
+});
+
 /** 撤销（删除）API key */
 keys.delete("/:id", async (c) => {
   const userId = getUserId(c);
