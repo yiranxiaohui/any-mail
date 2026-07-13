@@ -416,6 +416,13 @@ export function deleteApiKey(id: string) {
   return request<{ ok: boolean }>(`/api/keys/${id}`, { method: "DELETE" });
 }
 
+export function rotateApiKey(id: string) {
+  return request<{ ok: boolean; key: Omit<ApiKey, "last_used_at" | "created_at">; plaintext: string }>(
+    `/api/keys/${id}/rotate`,
+    { method: "POST" }
+  );
+}
+
 // User-owned domains
 export interface UserDomain {
   domain_name: string;

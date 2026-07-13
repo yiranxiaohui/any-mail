@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { getApiKeys, createApiKey, updateApiKey, deleteApiKey, type ApiKey } from "@/lib/api";
+import { getApiKeys, createApiKey, updateApiKey, deleteApiKey, rotateApiKey, type ApiKey } from "@/lib/api";
 
 const ALL_SCOPES = ["emails:read", "emails:send", "emails:delete", "accounts:read", "accounts:write", "domains:read"] as const;
 
@@ -113,6 +113,18 @@ export default function ApiKeys() {
     await deleteApiKey(key.id);
     setKeys((prev) => prev.filter((k) => k.id !== key.id));
     toast.success(t("apiKeys.revoked", { name: key.name }));
+  };
+
+  const handleRotate = async (key: ApiKey) => {
+    if (!confirm(t("apiKeys.rotateConfirm", { name: key.name }))) return;
+    try {
+      const res = await rotateApiKey(key.id);
+      setPlaintext({ key: res.plaintext, name: key.name });
+      toast.success(t("apiKeys.rotated", { name: key.name }));
+      fetchKeys();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("apiKeys.rotateFailed"));
+    }
   };
 
   const copyToClipboard = async (text: string) => {
@@ -327,6 +339,13 @@ export default function ApiKeys() {
                       onClick={() => openEdit(key)}
                     >
                       {t("apiKeys.edit")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRotate(key)}
+                    >
+                      {t("apiKeys.rotate")}
                     </Button>
                     <Button
                       variant="ghost"
