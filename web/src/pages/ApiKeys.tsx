@@ -29,7 +29,7 @@ export default function ApiKeys() {
   const [address, setAddress] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
 
-  // plaintext reveal (create only)
+  // plaintext reveal (create & rotate)
   const [plaintext, setPlaintext] = useState<{ key: string; name: string } | null>(null);
 
   const fetchKeys = async () => {
