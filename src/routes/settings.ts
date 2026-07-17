@@ -61,17 +61,18 @@ settings.post("/domains/check-mx", async (c) => {
 
 /**
  * 一键自动启用（admin only）：
- * 1) 在当前 CF 账号找到 Zone
- * 2) 启用 Email Routing（写 MX）
- * 3) Catch-all → Worker（默认 any-mail）
- * 4) 可选写入 EMAIL_DOMAINS
+ * 1) 在当前 CF 账号查找/创建 Zone（full 托管）
+ * 2) Zone 未 active 时返回 pending_ns + nameservers（用户改注册商 NS 后重试）
+ * 3) 启用 Email Routing（写 MX）
+ * 4) Catch-all → Worker（默认 any-mail）
+ * 5) 可选写入 EMAIL_DOMAINS
  *
- * 前提：域名 NS 已托管在本 CF 账号；Token 需 Zone:Read + Email Routing Edit。
+ * Token 需 Zone:Edit（创建）+ Zone:Read + Email Routing Edit。
  */
 settings.post("/domains/auto-enable", requireAdmin(), async (c) => {
   const body = await c.req
-    .json<{ domain?: string; import?: boolean; force_import?: boolean }>()
-    .catch(() => ({} as { domain?: string; import?: boolean; force_import?: boolean }));
+    .json<{ domain?: string; import?: boolean; force_import?: boolean; create_zone?: boolean }>()
+    .catch(() => ({} as { domain?: string; import?: boolean; force_import?: boolean; create_zone?: boolean }));
   const raw = body.domain?.trim();
   if (!raw) return c.json({ error: "domain required" }, 400);
 
@@ -86,7 +87,9 @@ settings.post("/domains/auto-enable", requireAdmin(), async (c) => {
     );
   }
 
-  const enable = await autoEnableEmailRouting(domain, creds);
+  const enable = await autoEnableEmailRouting(domain, creds, {
+    createIfMissing: body.create_zone !== false,
+  });
   // 业务失败也返回 200，便于前端展示 steps（HTTP 错误仅用于缺参/凭据）
   if (!enable.ok) {
     return c.json({
@@ -94,6 +97,10 @@ settings.post("/domains/auto-enable", requireAdmin(), async (c) => {
       error: enable.error ?? "auto_enable_failed",
       domain: enable.domain,
       zone_id: enable.zone_id,
+      zone_status: enable.zone_status,
+      nameservers: enable.nameservers,
+      pending_ns: enable.pending_ns,
+      zone_created: enable.zone_created,
       worker: enable.worker,
       steps: enable.steps,
     });
@@ -154,19 +161,23 @@ settings.post("/domains/auto-enable", requireAdmin(), async (c) => {
     steps: enable.steps,
     worker: enable.worker,
     zone_id: enable.zone_id,
+    zone_status: enable.zone_status,
+    nameservers: enable.nameservers,
+    zone_created: enable.zone_created,
   });
 });
 
 /**
  * 导入域名并尽量自动启用收信：
- * - admin + 有 CF 凭据：自动 Email Routing + catch-all → Worker，再写 EMAIL_DOMAINS
+ * - admin + 有 CF 凭据：必要时在本账号创建 Zone，Email Routing + catch-all → Worker，再写 EMAIL_DOMAINS
+ *   （Zone 未 active 时返回 pending_ns + nameservers）
  * - admin 无凭据 / auto_enable=false：仅 MX 检测后写入（force 可跳过 MX）
  * - 普通用户：写入 user_domains（个人声明）
  */
 settings.post("/domains/import", async (c) => {
   const body = await c.req
-    .json<{ domain?: string; force?: boolean; auto_enable?: boolean }>()
-    .catch(() => ({} as { domain?: string; force?: boolean; auto_enable?: boolean }));
+    .json<{ domain?: string; force?: boolean; auto_enable?: boolean; create_zone?: boolean }>()
+    .catch(() => ({} as { domain?: string; force?: boolean; auto_enable?: boolean; create_zone?: boolean }));
   const raw = body.domain?.trim();
   if (!raw) return c.json({ error: "domain required" }, 400);
 
@@ -181,13 +192,19 @@ settings.post("/domains/import", async (c) => {
   if (user.role === "admin" && wantAutoEnable) {
     const creds = await getCloudflareCredentials(c.env);
     if (creds) {
-      const enable = await autoEnableEmailRouting(domain, creds);
+      const enable = await autoEnableEmailRouting(domain, creds, {
+        createIfMissing: body.create_zone !== false,
+      });
       if (!enable.ok) {
         return c.json({
           ok: false,
           error: enable.error ?? "auto_enable_failed",
           domain: enable.domain,
           zone_id: enable.zone_id,
+          zone_status: enable.zone_status,
+          nameservers: enable.nameservers,
+          pending_ns: enable.pending_ns,
+          zone_created: enable.zone_created,
           worker: enable.worker,
           steps: enable.steps,
         });
@@ -227,6 +244,9 @@ settings.post("/domains/import", async (c) => {
         steps: enable.steps,
         worker: enable.worker,
         zone_id: enable.zone_id,
+        zone_status: enable.zone_status,
+        nameservers: enable.nameservers,
+        zone_created: enable.zone_created,
       });
     }
   }

@@ -15,19 +15,39 @@ export interface AutoEnableStep {
   detail?: string;
 }
 
+export interface ZoneInfo {
+  id: string;
+  name: string;
+  status: string;
+  name_servers: string[];
+}
+
 export interface AutoEnableResult {
   ok: boolean;
   domain: string;
   zone_id?: string;
+  zone_status?: string;
+  nameservers?: string[];
   worker: string;
   steps: AutoEnableStep[];
   error?: string;
+  /** zone 刚创建或尚未 active，需用户在注册商改 NS */
+  pending_ns?: boolean;
+  zone_created?: boolean;
 }
 
 type CfResponse<T> = {
   success: boolean;
   result?: T;
   errors?: { code?: number; message: string }[];
+};
+
+type CfZoneResult = {
+  id: string;
+  name: string;
+  status: string;
+  name_servers?: string[];
+  original_name_servers?: string[];
 };
 
 async function cfFetch<T>(
@@ -51,6 +71,15 @@ function cfError(data: CfResponse<unknown>, fallback: string): string {
   return data.errors?.[0]?.message || fallback;
 }
 
+function toZoneInfo(z: CfZoneResult): ZoneInfo {
+  return {
+    id: z.id,
+    name: z.name,
+    status: z.status,
+    name_servers: z.name_servers ?? [],
+  };
+}
+
 /** 从 env / settings 读取 CF 凭据 */
 export async function getCloudflareCredentials(env: Env): Promise<CfCredentials | null> {
   const rows = await env.DB.prepare(
@@ -66,23 +95,124 @@ export async function getCloudflareCredentials(env: Env): Promise<CfCredentials 
   return { apiToken, accountId, workerName };
 }
 
-/** 按域名查找 Zone（精确匹配） */
+/** 按 id 拉取 Zone 详情（补全 name_servers） */
+async function getZoneById(zoneId: string, creds: CfCredentials): Promise<ZoneInfo | null> {
+  const { data } = await cfFetch<CfZoneResult>(`/zones/${zoneId}`, creds.apiToken);
+  if (!data.success || !data.result) return null;
+  return toZoneInfo(data.result);
+}
+
+/** 按域名查找 Zone（精确匹配，含 name_servers） */
 export async function findZoneByName(
   domain: string,
   creds: CfCredentials,
-): Promise<{ id: string; name: string; status: string } | null> {
-  // 先精确查；失败再向上查父域（子域场景）
+): Promise<ZoneInfo | null> {
   const candidates = domainCandidates(domain);
   for (const name of candidates) {
-    const { data } = await cfFetch<{ id: string; name: string; status: string }[]>(
+    const { data } = await cfFetch<CfZoneResult[]>(
       `/zones?name=${encodeURIComponent(name)}&account.id=${encodeURIComponent(creds.accountId)}&per_page=5`,
       creds.apiToken,
     );
     if (!data.success) continue;
     const exact = (data.result ?? []).find((z) => z.name.toLowerCase() === name);
-    if (exact) return exact;
+    if (!exact) continue;
+    const info = toZoneInfo(exact);
+    if (info.name_servers.length === 0) {
+      const full = await getZoneById(info.id, creds);
+      if (full) return full;
+    }
+    return info;
   }
   return null;
+}
+
+/** 创建 Zone（full setup），返回分配的 NS */
+export async function createZone(
+  domain: string,
+  creds: CfCredentials,
+): Promise<{ zone?: ZoneInfo; error?: string; detail?: string }> {
+  // 只为 apex 建区：取最短候选（最后一级 eTLD 前的整域）
+  const apex = domainCandidates(domain)[0] ?? domain.toLowerCase();
+  const { data } = await cfFetch<CfZoneResult>("/zones", creds.apiToken, {
+    method: "POST",
+    body: JSON.stringify({
+      name: apex,
+      account: { id: creds.accountId },
+      type: "full",
+      jump_start: false,
+    }),
+  });
+
+  if (!data.success || !data.result) {
+    return {
+      error: "create_zone_failed",
+      detail: cfError(data, "failed to create zone"),
+    };
+  }
+  return { zone: toZoneInfo(data.result) };
+}
+
+/**
+ * 确保域名 Zone 在当前账号：不存在则创建；已存在则返回。
+ * Token 需 Zone:Edit（创建）/ Zone:Read。
+ */
+export async function ensureZone(
+  domain: string,
+  creds: CfCredentials,
+  opts?: { createIfMissing?: boolean },
+): Promise<{
+  zone: ZoneInfo | null;
+  created: boolean;
+  steps: AutoEnableStep[];
+  error?: string;
+}> {
+  const steps: AutoEnableStep[] = [];
+  const createIfMissing = opts?.createIfMissing !== false;
+
+  let zone = await findZoneByName(domain, creds);
+  if (zone) {
+    steps.push({
+      step: "find_zone",
+      ok: true,
+      detail: `${zone.name} (${zone.id}) status=${zone.status}`,
+    });
+    return { zone, created: false, steps };
+  }
+
+  steps.push({
+    step: "find_zone",
+    ok: false,
+    detail: "zone not found in this Cloudflare account",
+  });
+
+  if (!createIfMissing) {
+    return { zone: null, created: false, steps, error: "zone_not_found" };
+  }
+
+  const created = await createZone(domain, creds);
+  if (!created.zone) {
+    steps.push({
+      step: "create_zone",
+      ok: false,
+      detail: created.detail ?? "failed to create zone",
+    });
+    return { zone: null, created: false, steps, error: created.error ?? "create_zone_failed" };
+  }
+
+  zone = created.zone;
+  steps.push({
+    step: "create_zone",
+    ok: true,
+    detail: `${zone.name} (${zone.id}) status=${zone.status}`,
+  });
+  if (zone.name_servers.length > 0) {
+    steps.push({
+      step: "nameservers",
+      ok: true,
+      detail: zone.name_servers.join(", "),
+    });
+  }
+  return { zone, created: true, steps };
 }
 
 function domainCandidates(domain: string): string[] {
@@ -96,27 +226,56 @@ function domainCandidates(domain: string): string[] {
 
 /**
  * 自动启用 Email Routing 并将 catch-all 指向 Worker。
- * 前提：域名 Zone 已在当前 Cloudflare 账号下（NS 已托管）。
+ * 默认：Zone 不存在时在本账号创建（full 托管），返回 NS 供用户在注册商修改；
+ * Zone 未 active 时返回 pending_ns，不继续改 Email Routing。
  */
 export async function autoEnableEmailRouting(
   domain: string,
   creds: CfCredentials,
+  opts?: { createIfMissing?: boolean },
 ): Promise<AutoEnableResult> {
-  const steps: AutoEnableStep[] = [];
   const worker = creds.workerName;
+  const createIfMissing = opts?.createIfMissing !== false;
 
-  // 1) 查找 Zone
-  const zone = await findZoneByName(domain, creds);
-  if (!zone) {
+  // 1) 确保 Zone 在本账号
+  const ensured = await ensureZone(domain, creds, { createIfMissing });
+  const steps = [...ensured.steps];
+
+  if (!ensured.zone) {
     return {
       ok: false,
       domain,
       worker,
-      steps: [{ step: "find_zone", ok: false, detail: "zone not found in this Cloudflare account" }],
-      error: "zone_not_found",
+      steps,
+      error: ensured.error ?? "zone_not_found",
     };
   }
-  steps.push({ step: "find_zone", ok: true, detail: `${zone.name} (${zone.id})` });
+
+  const zone = ensured.zone;
+  const nameservers = zone.name_servers;
+
+  // Zone 未 active：无法可靠启用 Email Routing，提示改 NS
+  if (zone.status !== "active") {
+    steps.push({
+      step: "zone_active",
+      ok: false,
+      detail: `status=${zone.status}; update registrar NS then retry`,
+    });
+    return {
+      ok: false,
+      domain,
+      zone_id: zone.id,
+      zone_status: zone.status,
+      nameservers,
+      worker,
+      steps,
+      error: "pending_ns",
+      pending_ns: true,
+      zone_created: ensured.created,
+    };
+  }
+
+  steps.push({ step: "zone_active", ok: true, detail: "active" });
 
   // 2) 读取当前 Email Routing 状态
   const { data: statusData } = await cfFetch<{
@@ -127,7 +286,16 @@ export async function autoEnableEmailRouting(
 
   if (!statusData.success) {
     steps.push({ step: "get_routing", ok: false, detail: cfError(statusData, "failed to get email routing") });
-    return { ok: false, domain, zone_id: zone.id, worker, steps, error: "get_routing_failed" };
+    return {
+      ok: false,
+      domain,
+      zone_id: zone.id,
+      zone_status: zone.status,
+      nameservers,
+      worker,
+      steps,
+      error: "get_routing_failed",
+    };
   }
   steps.push({
     step: "get_routing",
@@ -142,7 +310,6 @@ export async function autoEnableEmailRouting(
       creds.apiToken,
       { method: "POST", body: "{}" },
     );
-    // 部分账号用 dns 端点
     if (!enableData.success) {
       const { data: dnsEnable } = await cfFetch<{ enabled: boolean }>(
         `/zones/${zone.id}/email/routing/dns`,
@@ -155,7 +322,16 @@ export async function autoEnableEmailRouting(
           ok: false,
           detail: cfError(enableData, cfError(dnsEnable, "failed to enable email routing")),
         });
-        return { ok: false, domain, zone_id: zone.id, worker, steps, error: "enable_routing_failed" };
+        return {
+          ok: false,
+          domain,
+          zone_id: zone.id,
+          zone_status: zone.status,
+          nameservers,
+          worker,
+          steps,
+          error: "enable_routing_failed",
+        };
       }
       steps.push({ step: "enable_routing", ok: true, detail: "enabled via /email/routing/dns" });
     } else {
@@ -179,7 +355,16 @@ export async function autoEnableEmailRouting(
 
   if (!catchGet.success) {
     steps.push({ step: "get_catch_all", ok: false, detail: cfError(catchGet, "failed to get catch-all") });
-    return { ok: false, domain, zone_id: zone.id, worker, steps, error: "get_catch_all_failed" };
+    return {
+      ok: false,
+      domain,
+      zone_id: zone.id,
+      zone_status: zone.status,
+      nameservers,
+      worker,
+      steps,
+      error: "get_catch_all_failed",
+    };
   }
 
   const currentAction = catchGet.result?.actions?.[0];
@@ -210,10 +395,28 @@ export async function autoEnableEmailRouting(
         ok: false,
         detail: cfError(catchPut, "failed to set catch-all to worker"),
       });
-      return { ok: false, domain, zone_id: zone.id, worker, steps, error: "set_catch_all_failed" };
+      return {
+        ok: false,
+        domain,
+        zone_id: zone.id,
+        zone_status: zone.status,
+        nameservers,
+        worker,
+        steps,
+        error: "set_catch_all_failed",
+      };
     }
     steps.push({ step: "set_catch_all", ok: true, detail: `catch-all → worker ${worker}` });
   }
 
-  return { ok: true, domain, zone_id: zone.id, worker, steps };
+  return {
+    ok: true,
+    domain,
+    zone_id: zone.id,
+    zone_status: zone.status,
+    nameservers,
+    worker,
+    steps,
+    zone_created: ensured.created,
+  };
 }

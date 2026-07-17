@@ -58,6 +58,12 @@ export default function Settings() {
   const [checkingMx, setCheckingMx] = useState(false);
   const [importingDomain, setImportingDomain] = useState(false);
   const [autoSteps, setAutoSteps] = useState<AutoEnableStep[] | null>(null);
+  const [pendingNs, setPendingNs] = useState<{
+    domain: string;
+    nameservers: string[];
+    zone_status?: string;
+    zone_created?: boolean;
+  } | null>(null);
   const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
@@ -123,16 +129,32 @@ export default function Settings() {
   };
 
   const handleImportDomain = async (force = false) => {
-    const d = importDomainInput.trim().toLowerCase();
+    const d = (pendingNs?.domain || importDomainInput).trim().toLowerCase();
     if (!d) return;
     setImportingDomain(true);
     setAutoSteps(null);
     try {
-      // 默认 auto_enable=true：有 CF 凭据时自动开 Email Routing + catch-all
-      const res = await importDomain(d, { force, auto_enable: true });
+      // 默认 auto_enable=true：必要时创建 Zone，再开 Email Routing + catch-all
+      const res = await importDomain(d, { force, auto_enable: true, create_zone: true });
       if (res.steps) setAutoSteps(res.steps);
       if (res.mx) setMxResult(res.mx);
       if (!res.ok) {
+        if (res.error === "pending_ns" || res.pending_ns) {
+          setPendingNs({
+            domain: res.domain,
+            nameservers: res.nameservers ?? [],
+            zone_status: res.zone_status,
+            zone_created: res.zone_created,
+          });
+          setImportDomainInput(res.domain);
+          toast.message(
+            res.zone_created
+              ? t("settings.zoneCreatedPendingNs", { domain: res.domain })
+              : t("settings.pendingNs", { domain: res.domain })
+          );
+          return;
+        }
+        setPendingNs(null);
         toast.error(
           t(`settings.autoEnableErrors.${res.error}`, {
             defaultValue: res.error || t("settings.domainImportFailed"),
@@ -140,6 +162,7 @@ export default function Settings() {
         );
         return;
       }
+      setPendingNs(null);
       if (res.domains?.length) {
         const merged = [...new Set([...allDomains, ...res.domains])];
         setAllDomains(merged);
@@ -314,6 +337,7 @@ export default function Settings() {
               onChange={(e) => {
                 setImportDomainInput(e.target.value);
                 setMxResult(null);
+                setPendingNs(null);
               }}
               onKeyDown={(e) => e.key === "Enter" && handleCheckMx()}
               className="flex-1"
@@ -327,12 +351,47 @@ export default function Settings() {
                 disabled={importingDomain || !importDomainInput.trim()}
                 onClick={() => handleImportDomain(false)}
               >
-                {importingDomain ? t("settings.domainImporting") : t("settings.domainImportBtn")}
+                {importingDomain
+                  ? t("settings.domainImporting")
+                  : pendingNs
+                    ? t("settings.domainRetryEnable")
+                    : t("settings.domainImportBtn")}
               </Button>
             </div>
           </div>
 
           <p className="text-xs text-muted-foreground">{t("settings.autoEnableHint")}</p>
+
+          {pendingNs && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm space-y-2">
+              <p className="font-medium">
+                {pendingNs.zone_created
+                  ? t("settings.zoneCreatedTitle", { domain: pendingNs.domain })
+                  : t("settings.pendingNsTitle", { domain: pendingNs.domain })}
+              </p>
+              <p className="text-xs text-muted-foreground">{t("settings.pendingNsHint")}</p>
+              {pendingNs.zone_status && (
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.zoneStatus", { status: pendingNs.zone_status })}
+                </p>
+              )}
+              {pendingNs.nameservers.length > 0 ? (
+                <ul className="space-y-1 font-mono text-xs">
+                  {pendingNs.nameservers.map((ns) => (
+                    <li key={ns} className="flex items-center justify-between gap-2 rounded-md border bg-background px-2 py-1.5">
+                      <span>{ns}</span>
+                      <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => copyText(ns)}>
+                        {t("settings.copy")}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground">{t("settings.nameserversEmpty")}</p>
+              )}
+              <p className="text-xs text-muted-foreground">{t("settings.pendingNsRetry")}</p>
+            </div>
+          )}
 
           {autoSteps && autoSteps.length > 0 && (
             <div className="rounded-lg border bg-muted/40 p-3 text-sm space-y-1">

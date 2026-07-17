@@ -145,7 +145,7 @@ bun run deploy
 推荐（域名已在本 CF 账号）：
 
 1. **设置** 配置 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`（Token 需 Zone:Read + Email Routing Edit）
-2. **导入域名** 输入域名 → **一键自动启用**（开 Email Routing、Catch-all → Worker、写入可用域）
+2. **导入域名** 输入域名 → **导入并启用**（无 Zone 时在本账号创建 → 展示 NS 供注册商修改 → Zone active 后启用 Email Routing、Catch-all → Worker、写入可用域）
 3. **账户** 页创建邮箱后即可收信
 
 手动 / 外站 DNS：

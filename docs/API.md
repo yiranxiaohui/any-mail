@@ -898,14 +898,14 @@ Public DNS MX check (Google DoH) for whether the domain points at Cloudflare Ema
 
 Import a domain. JWT only.
 
-- **Admin + CF credentials** (default `auto_enable: true`): enable Email Routing, set catch-all → Worker, then write `EMAIL_DOMAINS`.
+- **Admin + CF credentials** (default `auto_enable: true`, `create_zone: true`): create zone on this account if missing; if zone is not `active`, return `pending_ns` + `nameservers`; otherwise enable Email Routing, set catch-all → Worker, write `EMAIL_DOMAINS`.
 - **Admin without credentials** / `auto_enable: false`: MX check then write list (`force` skips MX).
 - **Regular user**: claim into `user_domains` after MX check.
 
 **Request:**
 
 ```json
-{ "domain": "example.com", "force": false, "auto_enable": true }
+{ "domain": "example.com", "force": false, "auto_enable": true, "create_zone": true }
 ```
 
 **Response (200)** with auto-enable:
@@ -919,25 +919,48 @@ Import a domain. JWT only.
   "scope": "global",
   "domains": ["example.com"],
   "worker": "any-mail",
+  "zone_id": "...",
+  "zone_status": "active",
   "steps": [{ "step": "set_catch_all", "ok": true, "detail": "..." }]
+}
+```
+
+**Response (200)** waiting for nameservers (zone created or not yet active):
+
+```json
+{
+  "ok": false,
+  "error": "pending_ns",
+  "pending_ns": true,
+  "zone_created": true,
+  "domain": "example.com",
+  "zone_id": "...",
+  "zone_status": "pending",
+  "nameservers": ["ada.ns.cloudflare.com", "bob.ns.cloudflare.com"],
+  "worker": "any-mail",
+  "steps": [
+    { "step": "create_zone", "ok": true, "detail": "..." },
+    { "step": "zone_active", "ok": false, "detail": "status=pending; update registrar NS then retry" }
+  ]
 }
 ```
 
 #### `POST /api/settings/domains/auto-enable`
 
-**Admin only.** One-click enable for a zone already in this Cloudflare account:
+**Admin only.** Full-host onboarding on this Cloudflare account:
 
-1. Find zone  
-2. Enable Email Routing (writes MX)  
-3. Set catch-all → Worker (`any-mail` or `CLOUDFLARE_EMAIL_WORKER`)  
-4. Optionally append to `EMAIL_DOMAINS` (default `import: true`)
+1. Find zone; if missing and `create_zone` (default true), create full zone  
+2. If zone status ≠ `active`, return `pending_ns` + `nameservers` (user must set registrar NS)  
+3. Enable Email Routing (writes MX)  
+4. Set catch-all → Worker (`any-mail` or `CLOUDFLARE_EMAIL_WORKER`)  
+5. Optionally append to `EMAIL_DOMAINS` (default `import: true`)
 
-Requires `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` (settings or env). Token needs Zone:Read and Email Routing Edit.
+Requires `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` (settings or env). Token needs **Zone:Edit** (create), Zone:Read, and Email Routing Edit.
 
 **Request:**
 
 ```json
-{ "domain": "example.com", "import": true, "force_import": true }
+{ "domain": "example.com", "import": true, "force_import": true, "create_zone": true }
 ```
 
 **Response (200)** success:
@@ -951,8 +974,10 @@ Requires `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` (settings or env). Tok
   "domains": ["example.com"],
   "worker": "any-mail",
   "zone_id": "...",
+  "zone_status": "active",
   "steps": [
     { "step": "find_zone", "ok": true, "detail": "..." },
+    { "step": "zone_active", "ok": true, "detail": "active" },
     { "step": "enable_routing", "ok": true, "detail": "..." },
     { "step": "set_catch_all", "ok": true, "detail": "catch-all → worker any-mail" }
   ]
@@ -971,7 +996,7 @@ Requires `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` (settings or env). Tok
 }
 ```
 
-`error` values: `zone_not_found` | `get_routing_failed` | `enable_routing_failed` | `get_catch_all_failed` | `set_catch_all_failed`.
+`error` values: `zone_not_found` | `create_zone_failed` | `pending_ns` | `get_routing_failed` | `enable_routing_failed` | `get_catch_all_failed` | `set_catch_all_failed`.
 
 **Response (400):**
 

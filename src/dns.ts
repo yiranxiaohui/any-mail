@@ -114,13 +114,13 @@ export async function checkDomainMx(rawDomain: string): Promise<MxCheckResult> {
 export function getMxGuide() {
   return {
     description:
-      "Point the domain MX records to Cloudflare Email Routing, then enable a catch-all route to the any-mail Worker.",
+      "Host the domain on this Cloudflare account (full NS), enable Email Routing, and point catch-all to the any-mail Worker.",
     steps: [
-      "Add the domain to your Cloudflare account (or use a zone already on Cloudflare).",
-      "Open Email → Email Routing and enable Email Routing (Cloudflare will create MX records).",
-      "If DNS is managed elsewhere, create the MX records listed in required_mx.",
-      "In Email Routing → Routing rules, add a catch-all (or *@domain) action: Send to a Worker → any-mail.",
-      "Use Check MX to verify public DNS has propagated, then enable the domain in AnyMail.",
+      "Import & enable: creates the zone on this account if missing.",
+      "At the registrar, set nameservers to the Cloudflare NS returned by the API.",
+      "When the zone status is active, retry Import & enable (or auto-enable).",
+      "AnyMail enables Email Routing and sets catch-all → Worker any-mail.",
+      "Create mailboxes; use Check MX to verify public DNS if needed.",
     ],
     required_mx: CF_EMAIL_MX.map((r) => ({
       type: "MX" as const,
@@ -135,9 +135,9 @@ export function getMxGuide() {
       value: "v=spf1 include:_spf.mx.cloudflare.net ~all",
     },
     notes: [
-      "Email Routing requires the zone to use Cloudflare DNS (nameservers) for full functionality.",
-      "MX propagation can take a few minutes to 48 hours depending on TTL.",
-      "After MX is OK, create mailboxes via Accounts or POST /api/accounts.",
+      "Full Email Routing requires Cloudflare nameservers on the account that owns the Worker (no cross-account Worker target).",
+      "NS/MX propagation can take a few minutes to 48 hours depending on TTL.",
+      "After enable, create mailboxes via Accounts or POST /api/accounts.",
     ],
   };
 }

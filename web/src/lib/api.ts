@@ -320,36 +320,53 @@ export interface AutoEnableResult {
   steps: AutoEnableStep[];
   worker?: string;
   zone_id?: string;
+  zone_status?: string;
+  nameservers?: string[];
+  pending_ns?: boolean;
+  zone_created?: boolean;
   error?: string;
   reason?: string;
 }
 
-export function importDomain(domain: string, opts?: { force?: boolean; auto_enable?: boolean }) {
-  return request<{
-    ok: boolean;
-    domain: string;
-    mx?: MxCheckResult | null;
-    forced?: boolean;
-    domains: string[];
-    scope?: string;
-    auto_enabled?: boolean;
-    enabled?: boolean;
-    steps?: AutoEnableStep[];
-    worker?: string;
-    zone_id?: string;
-    error?: string;
-  }>("/api/settings/domains/import", {
+export type DomainImportResult = {
+  ok: boolean;
+  domain: string;
+  mx?: MxCheckResult | null;
+  forced?: boolean;
+  domains: string[];
+  scope?: string;
+  auto_enabled?: boolean;
+  enabled?: boolean;
+  steps?: AutoEnableStep[];
+  worker?: string;
+  zone_id?: string;
+  zone_status?: string;
+  nameservers?: string[];
+  pending_ns?: boolean;
+  zone_created?: boolean;
+  error?: string;
+};
+
+export function importDomain(
+  domain: string,
+  opts?: { force?: boolean; auto_enable?: boolean; create_zone?: boolean },
+) {
+  return request<DomainImportResult>("/api/settings/domains/import", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       domain,
       force: opts?.force ?? false,
       auto_enable: opts?.auto_enable ?? true,
+      create_zone: opts?.create_zone ?? true,
     }),
   });
 }
 
-export function autoEnableDomain(domain: string, opts?: { import?: boolean; force_import?: boolean }) {
+export function autoEnableDomain(
+  domain: string,
+  opts?: { import?: boolean; force_import?: boolean; create_zone?: boolean },
+) {
   return request<AutoEnableResult>("/api/settings/domains/auto-enable", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -357,6 +374,7 @@ export function autoEnableDomain(domain: string, opts?: { import?: boolean; forc
       domain,
       import: opts?.import ?? true,
       force_import: opts?.force_import ?? true,
+      create_zone: opts?.create_zone ?? true,
     }),
   });
 }
