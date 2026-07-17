@@ -848,6 +848,82 @@ Fetch zones (and MX subdomain records) from the Cloudflare API and overwrite `EM
 { "error": "<cloudflare api error message>" }
 ```
 
+#### `GET /api/settings/domains/guide`
+
+Return the MX setup guide for Cloudflare Email Routing (required MX table, steps, notes). JWT only.
+
+**Response (200):**
+
+```json
+{
+  "description": "...",
+  "steps": ["..."],
+  "required_mx": [
+    { "type": "MX", "name": "@", "exchange": "route1.mx.cloudflare.net", "priority": 13, "ttl": "Auto / 3600" }
+  ],
+  "recommended_spf": { "type": "TXT", "name": "@", "value": "v=spf1 include:_spf.mx.cloudflare.net ~all" },
+  "notes": ["..."]
+}
+```
+
+#### `POST /api/settings/domains/check-mx`
+
+Public DNS MX check (Google DoH) for whether the domain points at Cloudflare Email Routing. JWT only.
+
+**Request:**
+
+```json
+{ "domain": "example.com" }
+```
+
+**Response (200):**
+
+```json
+{
+  "domain": "example.com",
+  "ok": true,
+  "records": [{ "exchange": "route1.mx.cloudflare.net", "priority": 13 }],
+  "matched": ["route1.mx.cloudflare.net"],
+  "missing": ["route2.mx.cloudflare.net", "route3.mx.cloudflare.net"],
+  "extra": [],
+  "message": "mx_partial"
+}
+```
+
+`message` values: `mx_ok` | `mx_ok_with_extra` | `mx_partial` | `mx_empty` | `mx_not_cloudflare` | `dns_error` | `invalid domain`.
+
+`ok` is `true` when at least one Cloudflare Email Routing MX is present.
+
+#### `POST /api/settings/domains/import`
+
+Check MX, then append the domain to `EMAIL_DOMAINS` when ready. JWT only.
+
+**Request:**
+
+```json
+{ "domain": "example.com", "force": false }
+```
+
+- `force: true` — import even if MX is not ready (mail may not arrive until Email Routing + Worker route are configured).
+
+**Response (200):**
+
+```json
+{
+  "ok": true,
+  "domain": "example.com",
+  "mx": { "ok": true, "message": "mx_ok", "...": "..." },
+  "forced": false,
+  "domains": ["example.com"]
+}
+```
+
+**Response (400)** when MX not ready and `force` is false:
+
+```json
+{ "error": "mx_not_ready", "message": "mx_empty", "mx": { "...": "..." } }
+```
+
 ---
 
 ### API Keys

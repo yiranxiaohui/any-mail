@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getSettings, updateSettings, syncDomainsFromCloudflare } from "@/lib/api";
+import {
+  getSettings,
+  updateSettings,
+  syncDomainsFromCloudflare,
+  getDomainMxGuide,
+  checkDomainMx,
+  importDomain,
+  type MxCheckResult,
+  type MxGuide,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,20 +45,26 @@ export default function Settings() {
   const [enabledDomains, setEnabledDomains] = useState<string[]>([]);
   const [allDomains, setAllDomains] = useState<string[]>([]);
   const [newDomain, setNewDomain] = useState("");
+  const [importDomainInput, setImportDomainInput] = useState("");
+  const [mxGuide, setMxGuide] = useState<MxGuide | null>(null);
+  const [mxResult, setMxResult] = useState<MxCheckResult | null>(null);
+  const [checkingMx, setCheckingMx] = useState(false);
+  const [importingDomain, setImportingDomain] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
-    getSettings()
-      .then((res) => {
+    Promise.all([getSettings(), getDomainMxGuide().catch(() => null)])
+      .then(([res, guide]) => {
         const ex: Record<string, { masked: string; updated_at: string }> = {};
         for (const [k, v] of Object.entries(res.settings)) {
           ex[k] = { masked: v.masked, updated_at: v.updated_at };
         }
         setExisting(ex);
-        // 加载已启用的域名
         const domainStr = res.settings.EMAIL_DOMAINS?.value || "";
         const domains = domainStr.split(",").map((d: string) => d.trim()).filter(Boolean);
         setEnabledDomains(domains);
         setAllDomains(domains);
+        if (guide) setMxGuide(guide);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -82,6 +97,46 @@ export default function Settings() {
     setNewDomain("");
   };
 
+  const handleCheckMx = async () => {
+    const d = importDomainInput.trim().toLowerCase();
+    if (!d) return;
+    setCheckingMx(true);
+    setMxResult(null);
+    try {
+      const res = await checkDomainMx(d);
+      setMxResult(res);
+      if (res.ok) toast.success(t("settings.mxCheckOk"));
+      else toast.error(t(`settings.mxStatus.${res.message}`, { defaultValue: t("settings.mxCheckFail") }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.mxCheckFail"));
+    } finally {
+      setCheckingMx(false);
+    }
+  };
+
+  const handleImportDomain = async (force = false) => {
+    const d = importDomainInput.trim().toLowerCase();
+    if (!d) return;
+    setImportingDomain(true);
+    try {
+      const res = await importDomain(d, force);
+      setMxResult(res.mx);
+      const merged = [...new Set([...allDomains, ...res.domains])];
+      setAllDomains(merged);
+      setEnabledDomains(merged);
+      setImportDomainInput("");
+      toast.success(
+        res.forced ? t("settings.domainImportedForced", { domain: res.domain }) : t("settings.domainImported", { domain: res.domain })
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t("settings.domainImportFailed");
+      if (msg === "mx_not_ready") toast.error(t("settings.mxNotReady"));
+      else toast.error(msg);
+    } finally {
+      setImportingDomain(false);
+    }
+  };
+
   const toggleDomain = (domain: string) => {
     setEnabledDomains((prev) =>
       prev.includes(domain) ? prev.filter((d) => d !== domain) : [...prev, domain]
@@ -91,6 +146,15 @@ export default function Settings() {
   const removeDomain = (domain: string) => {
     setAllDomains((prev) => prev.filter((d) => d !== domain));
     setEnabledDomains((prev) => prev.filter((d) => d !== domain));
+  };
+
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(t("settings.copied"));
+    } catch {
+      toast.error(t("settings.copyFailed"));
+    }
   };
 
   const handleSave = async () => {
@@ -151,15 +215,146 @@ export default function Settings() {
         onChange={handleChange}
       />
 
+      {/* Domain Import + MX Guide */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M2 12h20" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+              <div>
+                <CardTitle className="text-base">{t("settings.domainImportTitle")}</CardTitle>
+                <CardDescription>{t("settings.domainImportDescription")}</CardDescription>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setShowGuide((v) => !v)}>
+              {showGuide ? t("settings.hideGuide") : t("settings.showGuide")}
+            </Button>
+          </div>
+        </CardHeader>
+        <Separator />
+        <CardContent className="pt-4 space-y-4">
+          {showGuide && mxGuide && (
+            <div className="rounded-lg border bg-muted/40 p-4 space-y-3 text-sm">
+              <p className="text-muted-foreground">{t("settings.mxGuideIntro")}</p>
+              <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                <li>{t("settings.mxStep1")}</li>
+                <li>{t("settings.mxStep2")}</li>
+                <li>{t("settings.mxStep3")}</li>
+                <li>{t("settings.mxStep4")}</li>
+                <li>{t("settings.mxStep5")}</li>
+              </ol>
+              <div>
+                <p className="font-medium mb-2">{t("settings.requiredMx")}</p>
+                <div className="overflow-x-auto rounded-md border bg-background">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b text-left text-muted-foreground">
+                        <th className="px-3 py-2">Type</th>
+                        <th className="px-3 py-2">Name</th>
+                        <th className="px-3 py-2">Priority</th>
+                        <th className="px-3 py-2">Value</th>
+                        <th className="px-3 py-2" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mxGuide.required_mx.map((row) => (
+                        <tr key={row.exchange} className="border-b last:border-0">
+                          <td className="px-3 py-2 font-mono">{row.type}</td>
+                          <td className="px-3 py-2 font-mono">{row.name}</td>
+                          <td className="px-3 py-2 font-mono">{row.priority}</td>
+                          <td className="px-3 py-2 font-mono">{row.exchange}</td>
+                          <td className="px-3 py-2">
+                            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => copyText(row.exchange)}>
+                              {t("settings.copy")}
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">{t("settings.mxGuideNote")}</p>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              placeholder={t("settings.domainImportPlaceholder")}
+              value={importDomainInput}
+              onChange={(e) => {
+                setImportDomainInput(e.target.value);
+                setMxResult(null);
+              }}
+              onKeyDown={(e) => e.key === "Enter" && handleCheckMx()}
+              className="flex-1"
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" disabled={checkingMx || !importDomainInput.trim()} onClick={handleCheckMx}>
+                {checkingMx ? t("settings.mxChecking") : t("settings.mxCheck")}
+              </Button>
+              <Button
+                size="sm"
+                disabled={importingDomain || !importDomainInput.trim()}
+                onClick={() => handleImportDomain(false)}
+              >
+                {importingDomain ? t("settings.domainImporting") : t("settings.domainImportBtn")}
+              </Button>
+            </div>
+          </div>
+
+          {mxResult && (
+            <div
+              className={`rounded-lg border p-3 text-sm space-y-2 ${
+                mxResult.ok ? "border-green-500/40 bg-green-500/5" : "border-amber-500/40 bg-amber-500/5"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium">
+                  {mxResult.domain}{" "}
+                  <span className={mxResult.ok ? "text-green-600" : "text-amber-600"}>
+                    {mxResult.ok ? t("settings.mxStatusOk") : t("settings.mxStatusFail")}
+                  </span>
+                </p>
+                {!mxResult.ok && (
+                  <Button variant="outline" size="sm" disabled={importingDomain} onClick={() => handleImportDomain(true)}>
+                    {t("settings.domainImportForce")}
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t(`settings.mxStatus.${mxResult.message}`, { defaultValue: mxResult.message })}
+              </p>
+              {mxResult.records.length > 0 ? (
+                <ul className="font-mono text-xs space-y-0.5">
+                  {mxResult.records.map((r) => (
+                    <li key={`${r.priority}-${r.exchange}`}>
+                      {r.priority} {r.exchange}
+                      {mxResult.matched.includes(r.exchange) ? " ✓" : ""}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground">{t("settings.mxNoRecords")}</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Domain Management */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M2 12h20" />
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                <path d="M4 7h16" />
+                <path d="M4 12h16" />
+                <path d="M4 17h10" />
               </svg>
               <div>
                 <CardTitle className="text-base">{t("settings.fields.emailDomains")}</CardTitle>

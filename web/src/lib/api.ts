@@ -49,11 +49,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
-    // Try to surface the server's error message
     let msg = `API error: ${res.status}`;
     try {
-      const body = await res.json() as { error?: string };
+      const body = await res.json() as { error?: string; message?: string };
       if (body?.error) msg = body.error;
+      else if (body?.message) msg = body.message;
     } catch {
       // not JSON
     }
@@ -268,6 +268,52 @@ export function syncDomainsFromCloudflare() {
   return request<{ ok: boolean; domains: string[] }>("/api/settings/domains/sync", { method: "POST" });
 }
 
+export interface MxRecord {
+  exchange: string;
+  priority: number;
+}
+
+export interface MxCheckResult {
+  domain: string;
+  ok: boolean;
+  records: MxRecord[];
+  matched: string[];
+  missing: string[];
+  extra: string[];
+  message: string;
+  error?: string;
+}
+
+export interface MxGuide {
+  description: string;
+  steps: string[];
+  required_mx: { type: string; name: string; exchange: string; priority: number; ttl: string }[];
+  recommended_spf: { type: string; name: string; value: string };
+  notes: string[];
+}
+
+export function getDomainMxGuide() {
+  return request<MxGuide>("/api/settings/domains/guide");
+}
+
+export function checkDomainMx(domain: string) {
+  return request<MxCheckResult>("/api/settings/domains/check-mx", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ domain }),
+  });
+}
+
+export function importDomain(domain: string, force = false) {
+  return request<{ ok: boolean; domain: string; mx: MxCheckResult; forced: boolean; domains: string[]; scope?: string }>(
+    "/api/settings/domains/import",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain, force }),
+    }
+  );
+}
 
 // API Keys
 export interface ApiKey {

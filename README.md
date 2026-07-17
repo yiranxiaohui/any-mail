@@ -142,9 +142,14 @@ bun run deploy
 
 ### 配置域名邮箱（可选）
 
+推荐：登录前端 → **设置** → **导入域名**，按 MX 指引配置解析，用「检测 MX」确认生效后导入。
+
+手动步骤：
+
 1. Cloudflare Dashboard → 你的域名 → Email → Email Routing
 2. 启用 Email Routing，Cloudflare 会自动添加 MX 记录
 3. 添加路由规则，将 `*@yourdomain.com` 路由到 `any-mail` Worker
+4. 在设置页检测 MX 并导入 / 启用域名
 
 ## Gmail 配置
 
