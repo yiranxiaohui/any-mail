@@ -898,7 +898,7 @@ Public DNS MX check (Google DoH) for whether the domain points at Cloudflare Ema
 
 Import a domain. JWT only.
 
-- **Admin + CF credentials** (default `auto_enable: true`, `create_zone: true`): create zone on this account if missing; if zone is not `active`, return `pending_ns` + `nameservers`; otherwise enable Email Routing, set catch-all → Worker, write `EMAIL_DOMAINS`.
+- **Admin + CF credentials** (default `auto_enable: true`, `create_zone: true`): create zone on the **host** Cloudflare account (the one that deploys any-mail / Account ID in settings) if missing; if zone is not `active`, return `pending_ns` + `nameservers`; otherwise enable Email Routing, set catch-all → Worker on that host account, write `EMAIL_DOMAINS`. User personal CF accounts cannot target this Worker.
 - **Admin without credentials** / `auto_enable: false`: MX check then write list (`force` skips MX).
 - **Regular user**: claim into `user_domains` after MX check.
 
@@ -947,7 +947,7 @@ Import a domain. JWT only.
 
 #### `POST /api/settings/domains/auto-enable`
 
-**Admin only.** Full-host onboarding on this Cloudflare account:
+**Admin only.** Full-host onboarding on the **host** Cloudflare account (Worker deploy account):
 
 1. Find zone; if missing and `create_zone` (default true), create full zone  
 2. If zone status ≠ `active`, return `pending_ns` + `nameservers` (user must set registrar NS)  

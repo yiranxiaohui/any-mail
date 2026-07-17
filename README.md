@@ -142,17 +142,15 @@ bun run deploy
 
 ### 配置域名邮箱（可选）
 
-推荐（域名已在本 CF 账号）：
+域名必须托管到**部署 any-mail Worker 的主 Cloudflare 账号**（设置中的 `CLOUDFLARE_ACCOUNT_ID`），才能把 Email Routing Catch-all 指向本 Worker。用户个人 CF 账号**无法**跨账号指向本 Worker。
 
-1. **设置** 配置 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`（Token 需 Zone:Read + Email Routing Edit）
-2. **导入域名** 输入域名 → **导入并启用**（无 Zone 时在本账号创建 → 展示 NS 供注册商修改 → Zone active 后启用 Email Routing、Catch-all → Worker、写入可用域）
+推荐流程：
+
+1. **设置** 配置主账号的 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`（Token 需 Zone:Edit + Zone:Read + Email Routing Edit）
+2. **导入域名** 输入域名 → **导入并启用**（无 Zone 时在主账号创建 → 展示 NS 供注册商修改 → Zone active 后启用 Email Routing、Catch-all → Worker、写入可用域）
 3. **账户** 页创建邮箱后即可收信
 
-手动 / 外站 DNS：
-
-1. 按设置页 MX 指引添加记录，或 Dashboard → Email Routing 启用
-2. Catch-all / `*@域` → Worker `any-mail`
-3. 「检测 MX」通过后「仅导入」
+说明：若域名已在其他 Cloudflare 账号，需先移出再在主账号导入；仅改 MX、NS 仍在用户账号或外站 DNS，邮件到不了本 Worker。
 
 ## Gmail 配置
 

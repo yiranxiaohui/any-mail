@@ -114,12 +114,12 @@ export async function checkDomainMx(rawDomain: string): Promise<MxCheckResult> {
 export function getMxGuide() {
   return {
     description:
-      "Host the domain on this Cloudflare account (full NS), enable Email Routing, and point catch-all to the any-mail Worker.",
+      "Host the domain on the main Cloudflare account that deploys the any-mail Worker (full NS). User personal CF accounts cannot target this Worker.",
     steps: [
-      "Import & enable: creates the zone on this account if missing.",
-      "At the registrar, set nameservers to the Cloudflare NS returned by the API.",
+      "Admin Import & enable: creates the zone on the host account if missing.",
+      "At the registrar, set nameservers to the Cloudflare NS returned for that host zone.",
       "When the zone status is active, retry Import & enable (or auto-enable).",
-      "AnyMail enables Email Routing and sets catch-all → Worker any-mail.",
+      "AnyMail enables Email Routing on the host account and sets catch-all → Worker any-mail.",
       "Create mailboxes; use Check MX to verify public DNS if needed.",
     ],
     required_mx: CF_EMAIL_MX.map((r) => ({
@@ -135,7 +135,8 @@ export function getMxGuide() {
       value: "v=spf1 include:_spf.mx.cloudflare.net ~all",
     },
     notes: [
-      "Full Email Routing requires Cloudflare nameservers on the account that owns the Worker (no cross-account Worker target).",
+      "Email Routing catch-all → Worker only works on the same Cloudflare account as the Worker (no cross-account).",
+      "Do not host the zone only on a user’s personal Cloudflare account.",
       "NS/MX propagation can take a few minutes to 48 hours depending on TTL.",
       "After enable, create mailboxes via Accounts or POST /api/accounts.",
     ],
