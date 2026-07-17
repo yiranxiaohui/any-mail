@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../types";
 import { requireJwt, requireAdmin, getUserId, type ApiKeyContext, type UserContext } from "../auth";
 import { checkDomainMx, getMxGuide, normalizeDomain } from "../dns";
+import { autoEnableEmailRouting, getCloudflareCredentials } from "../cloudflare";
 
 // 系统级（仅 admin 可读写）
 const SYSTEM_KEYS = [
@@ -9,6 +10,7 @@ const SYSTEM_KEYS = [
   "EMAIL_DOMAINS",
   "CLOUDFLARE_API_TOKEN",
   "CLOUDFLARE_ACCOUNT_ID",
+  "CLOUDFLARE_EMAIL_WORKER",
   "SHARED_INBOX_DOMAIN",
 ];
 
@@ -55,6 +57,104 @@ settings.post("/domains/check-mx", async (c) => {
       502
     );
   }
+});
+
+/**
+ * 一键自动启用（admin only）：
+ * 1) 在当前 CF 账号找到 Zone
+ * 2) 启用 Email Routing（写 MX）
+ * 3) Catch-all → Worker（默认 any-mail）
+ * 4) 可选写入 EMAIL_DOMAINS
+ *
+ * 前提：域名 NS 已托管在本 CF 账号；Token 需 Zone:Read + Email Routing Edit。
+ */
+settings.post("/domains/auto-enable", requireAdmin(), async (c) => {
+  const body = await c.req
+    .json<{ domain?: string; import?: boolean; force_import?: boolean }>()
+    .catch(() => ({} as { domain?: string; import?: boolean; force_import?: boolean }));
+  const raw = body.domain?.trim();
+  if (!raw) return c.json({ error: "domain required" }, 400);
+
+  const domain = normalizeDomain(raw);
+  if (!domain) return c.json({ error: "invalid domain" }, 400);
+
+  const creds = await getCloudflareCredentials(c.env);
+  if (!creds) {
+    return c.json(
+      { error: "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required." },
+      400
+    );
+  }
+
+  const enable = await autoEnableEmailRouting(domain, creds);
+  // 业务失败也返回 200，便于前端展示 steps（HTTP 错误仅用于缺参/凭据）
+  if (!enable.ok) {
+    return c.json({
+      ok: false,
+      error: enable.error ?? "auto_enable_failed",
+      domain: enable.domain,
+      zone_id: enable.zone_id,
+      worker: enable.worker,
+      steps: enable.steps,
+    });
+  }
+
+  // 默认导入到全局 EMAIL_DOMAINS；import=false 时只配 CF
+  let domains: string[] | undefined;
+  let mx = null as Awaited<ReturnType<typeof checkDomainMx>> | null;
+  const shouldImport = body.import !== false;
+
+  if (shouldImport) {
+    try {
+      mx = await checkDomainMx(domain);
+    } catch {
+      mx = null;
+    }
+
+    // 自动启用后公网 MX 可能尚未传播；默认允许写入（force_import 默认 true）
+    const forceImport = body.force_import !== false;
+    if (mx && !mx.ok && !forceImport) {
+      return c.json({
+        ok: true,
+        domain,
+        enabled: true,
+        imported: false,
+        reason: "mx_not_ready",
+        mx,
+        steps: enable.steps,
+        worker: enable.worker,
+        zone_id: enable.zone_id,
+      });
+    }
+
+    const row = await c.env.DB.prepare("SELECT value FROM settings WHERE key = 'EMAIL_DOMAINS'")
+      .first<{ value: string }>();
+    const existing = row?.value
+      ? row.value.split(",").map((d) => d.trim().toLowerCase()).filter(Boolean)
+      : [];
+    if (!existing.includes(domain)) {
+      existing.push(domain);
+      const value = existing.join(",");
+      await c.env.DB.prepare(
+        "INSERT INTO settings (key, value, updated_at) VALUES ('EMAIL_DOMAINS', ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')"
+      )
+        .bind(value, value)
+        .run();
+    }
+    domains = existing;
+  }
+
+  return c.json({
+    ok: true,
+    domain,
+    enabled: true,
+    imported: shouldImport,
+    domains,
+    mx,
+    steps: enable.steps,
+    worker: enable.worker,
+    zone_id: enable.zone_id,
+  });
 });
 
 /**

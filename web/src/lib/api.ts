@@ -315,6 +315,38 @@ export function importDomain(domain: string, force = false) {
   );
 }
 
+export interface AutoEnableStep {
+  step: string;
+  ok: boolean;
+  detail?: string;
+}
+
+export interface AutoEnableResult {
+  ok: boolean;
+  domain: string;
+  enabled?: boolean;
+  imported?: boolean;
+  domains?: string[];
+  mx?: MxCheckResult | null;
+  steps: AutoEnableStep[];
+  worker?: string;
+  zone_id?: string;
+  error?: string;
+  reason?: string;
+}
+
+export function autoEnableDomain(domain: string, opts?: { import?: boolean; force_import?: boolean }) {
+  return request<AutoEnableResult>("/api/settings/domains/auto-enable", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      domain,
+      import: opts?.import ?? true,
+      force_import: opts?.force_import ?? true,
+    }),
+  });
+}
+
 // API Keys
 export interface ApiKey {
   id: string;

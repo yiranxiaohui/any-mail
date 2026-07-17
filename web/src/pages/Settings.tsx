@@ -7,8 +7,10 @@ import {
   getDomainMxGuide,
   checkDomainMx,
   importDomain,
+  autoEnableDomain,
   type MxCheckResult,
   type MxGuide,
+  type AutoEnableStep,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +37,12 @@ const GENERAL_FIELDS: FieldConfig[] = [
   { key: "SHARED_INBOX_DOMAIN", labelKey: "settings.fields.sharedInboxDomain", placeholderKey: "settings.fields.sharedInboxDomainPlaceholder", sensitive: false },
 ];
 
+const CLOUDFLARE_FIELDS: FieldConfig[] = [
+  { key: "CLOUDFLARE_API_TOKEN", labelKey: "settings.fields.cfApiToken", placeholderKey: "settings.fields.cfApiTokenPlaceholder", sensitive: true },
+  { key: "CLOUDFLARE_ACCOUNT_ID", labelKey: "settings.fields.cfAccountId", placeholderKey: "settings.fields.cfAccountIdPlaceholder", sensitive: false },
+  { key: "CLOUDFLARE_EMAIL_WORKER", labelKey: "settings.fields.cfEmailWorker", placeholderKey: "settings.fields.cfEmailWorkerPlaceholder", sensitive: false },
+];
+
 export default function Settings() {
   const { t } = useTranslation();
   const [values, setValues] = useState<Record<string, string>>({});
@@ -50,6 +58,8 @@ export default function Settings() {
   const [mxResult, setMxResult] = useState<MxCheckResult | null>(null);
   const [checkingMx, setCheckingMx] = useState(false);
   const [importingDomain, setImportingDomain] = useState(false);
+  const [autoEnabling, setAutoEnabling] = useState(false);
+  const [autoSteps, setAutoSteps] = useState<AutoEnableStep[] | null>(null);
   const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
@@ -134,6 +144,33 @@ export default function Settings() {
       else toast.error(msg);
     } finally {
       setImportingDomain(false);
+    }
+  };
+
+  const handleAutoEnable = async () => {
+    const d = importDomainInput.trim().toLowerCase();
+    if (!d) return;
+    setAutoEnabling(true);
+    setAutoSteps(null);
+    try {
+      const res = await autoEnableDomain(d);
+      setAutoSteps(res.steps ?? []);
+      if (res.mx) setMxResult(res.mx);
+      if (res.domains?.length) {
+        const merged = [...new Set([...allDomains, ...res.domains])];
+        setAllDomains(merged);
+        setEnabledDomains(merged);
+      }
+      if (res.ok) {
+        toast.success(t("settings.autoEnableOk", { domain: res.domain, worker: res.worker ?? "any-mail" }));
+      } else {
+        toast.error(t(`settings.autoEnableErrors.${res.error}`, { defaultValue: res.error || t("settings.autoEnableFailed") }));
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t("settings.autoEnableFailed");
+      toast.error(t(`settings.autoEnableErrors.${msg}`, { defaultValue: msg }));
+    } finally {
+      setAutoEnabling(false);
     }
   };
 
@@ -293,11 +330,19 @@ export default function Settings() {
               onKeyDown={(e) => e.key === "Enter" && handleCheckMx()}
               className="flex-1"
             />
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" disabled={checkingMx || !importDomainInput.trim()} onClick={handleCheckMx}>
                 {checkingMx ? t("settings.mxChecking") : t("settings.mxCheck")}
               </Button>
               <Button
+                size="sm"
+                disabled={autoEnabling || !importDomainInput.trim()}
+                onClick={handleAutoEnable}
+              >
+                {autoEnabling ? t("settings.autoEnabling") : t("settings.autoEnableBtn")}
+              </Button>
+              <Button
+                variant="outline"
                 size="sm"
                 disabled={importingDomain || !importDomainInput.trim()}
                 onClick={() => handleImportDomain(false)}
@@ -306,6 +351,21 @@ export default function Settings() {
               </Button>
             </div>
           </div>
+
+          <p className="text-xs text-muted-foreground">{t("settings.autoEnableHint")}</p>
+
+          {autoSteps && autoSteps.length > 0 && (
+            <div className="rounded-lg border bg-muted/40 p-3 text-sm space-y-1">
+              <p className="font-medium">{t("settings.autoEnableSteps")}</p>
+              <ul className="space-y-0.5 text-xs font-mono">
+                {autoSteps.map((s) => (
+                  <li key={s.step} className={s.ok ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"}>
+                    {s.ok ? "✓" : "✗"} {s.step}{s.detail ? ` — ${s.detail}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {mxResult && (
             <div
@@ -410,6 +470,21 @@ export default function Settings() {
           </p>
         </CardContent>
       </Card>
+
+      <SettingsSection
+        title={t("settings.cloudflare")}
+        description={t("settings.cloudflareDescription")}
+        icon={
+          <svg className="h-5 w-5 text-orange-500" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M16.5 15.5c.9-1.5 1.1-3.3.4-5-.5-1.3-1.5-2.4-2.8-2.9-.3-1.7-1.4-3.2-2.9-4-1.8-1-4-1-5.8-.1-1.6.8-2.7 2.3-3 4.1C1 8.2 0 9.8 0 11.6c0 2.8 2.2 5 5 5h11c.2 0 .3 0 .5-.1z" />
+            <path d="M19.5 11.2c-.3 0-.6 0-.9.1-.4-1.5-1.4-2.7-2.8-3.3.1.4.2.8.2 1.2 0 1.4-.6 2.7-1.6 3.6 1.2.5 2.1 1.5 2.5 2.7H20c1.1 0 2-.9 2-2s-.9-2.3-2.5-2.3z" opacity=".7" />
+          </svg>
+        }
+        fields={CLOUDFLARE_FIELDS}
+        values={values}
+        existing={existing}
+        onChange={handleChange}
+      />
 
       <SettingsSection
         title={t("settings.gmail")}

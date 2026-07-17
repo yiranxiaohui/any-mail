@@ -896,7 +896,8 @@ Public DNS MX check (Google DoH) for whether the domain points at Cloudflare Ema
 
 #### `POST /api/settings/domains/import`
 
-Check MX, then append the domain to `EMAIL_DOMAINS` when ready. JWT only.
+Check MX, then append the domain to available domains when ready. JWT only.  
+Admin → global `EMAIL_DOMAINS`; regular user → `user_domains`.
 
 **Request:**
 
@@ -914,8 +915,65 @@ Check MX, then append the domain to `EMAIL_DOMAINS` when ready. JWT only.
   "domain": "example.com",
   "mx": { "ok": true, "message": "mx_ok", "...": "..." },
   "forced": false,
+  "scope": "global",
   "domains": ["example.com"]
 }
+```
+
+#### `POST /api/settings/domains/auto-enable`
+
+**Admin only.** One-click enable for a zone already in this Cloudflare account:
+
+1. Find zone  
+2. Enable Email Routing (writes MX)  
+3. Set catch-all → Worker (`any-mail` or `CLOUDFLARE_EMAIL_WORKER`)  
+4. Optionally append to `EMAIL_DOMAINS` (default `import: true`)
+
+Requires `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` (settings or env). Token needs Zone:Read and Email Routing Edit.
+
+**Request:**
+
+```json
+{ "domain": "example.com", "import": true, "force_import": true }
+```
+
+**Response (200)** success:
+
+```json
+{
+  "ok": true,
+  "domain": "example.com",
+  "enabled": true,
+  "imported": true,
+  "domains": ["example.com"],
+  "worker": "any-mail",
+  "zone_id": "...",
+  "steps": [
+    { "step": "find_zone", "ok": true, "detail": "..." },
+    { "step": "enable_routing", "ok": true, "detail": "..." },
+    { "step": "set_catch_all", "ok": true, "detail": "catch-all → worker any-mail" }
+  ]
+}
+```
+
+**Response (200)** business failure (still 200 so clients can show `steps`):
+
+```json
+{
+  "ok": false,
+  "error": "zone_not_found",
+  "domain": "example.com",
+  "worker": "any-mail",
+  "steps": [{ "step": "find_zone", "ok": false, "detail": "zone not found in this Cloudflare account" }]
+}
+```
+
+`error` values: `zone_not_found` | `get_routing_failed` | `enable_routing_failed` | `get_catch_all_failed` | `set_catch_all_failed`.
+
+**Response (400):**
+
+```json
+{ "error": "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required." }
 ```
 
 **Response (400)** when MX not ready and `force` is false:
