@@ -158,16 +158,80 @@ settings.post("/domains/auto-enable", requireAdmin(), async (c) => {
 });
 
 /**
- * 导入域名：校验 MX 后写入可用域。
- * - admin → 全局 EMAIL_DOMAINS
- * - 普通用户 → user_domains（个人声明）
- * force=true 可跳过 MX 校验。
+ * 导入域名并尽量自动启用收信：
+ * - admin + 有 CF 凭据：自动 Email Routing + catch-all → Worker，再写 EMAIL_DOMAINS
+ * - admin 无凭据 / auto_enable=false：仅 MX 检测后写入（force 可跳过 MX）
+ * - 普通用户：写入 user_domains（个人声明）
  */
 settings.post("/domains/import", async (c) => {
-  const body = await c.req.json<{ domain?: string; force?: boolean }>().catch(() => ({} as { domain?: string; force?: boolean }));
+  const body = await c.req
+    .json<{ domain?: string; force?: boolean; auto_enable?: boolean }>()
+    .catch(() => ({} as { domain?: string; force?: boolean; auto_enable?: boolean }));
   const raw = body.domain?.trim();
   if (!raw) return c.json({ error: "domain required" }, 400);
 
+  const domain = normalizeDomain(raw);
+  if (!domain) return c.json({ error: "invalid domain" }, 400);
+
+  const user = c.get("user")!;
+  const userId = getUserId(c);
+  const wantAutoEnable = body.auto_enable !== false;
+
+  // admin 默认自动启用（有 CF 凭据时）
+  if (user.role === "admin" && wantAutoEnable) {
+    const creds = await getCloudflareCredentials(c.env);
+    if (creds) {
+      const enable = await autoEnableEmailRouting(domain, creds);
+      if (!enable.ok) {
+        return c.json({
+          ok: false,
+          error: enable.error ?? "auto_enable_failed",
+          domain: enable.domain,
+          zone_id: enable.zone_id,
+          worker: enable.worker,
+          steps: enable.steps,
+        });
+      }
+
+      let mx = null as Awaited<ReturnType<typeof checkDomainMx>> | null;
+      try {
+        mx = await checkDomainMx(domain);
+      } catch {
+        mx = null;
+      }
+
+      const row = await c.env.DB.prepare("SELECT value FROM settings WHERE key = 'EMAIL_DOMAINS'")
+        .first<{ value: string }>();
+      const existing = row?.value
+        ? row.value.split(",").map((d) => d.trim().toLowerCase()).filter(Boolean)
+        : [];
+      if (!existing.includes(domain)) {
+        existing.push(domain);
+        const value = existing.join(",");
+        await c.env.DB.prepare(
+          "INSERT INTO settings (key, value, updated_at) VALUES ('EMAIL_DOMAINS', ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')"
+        )
+          .bind(value, value)
+          .run();
+      }
+
+      return c.json({
+        ok: true,
+        domain,
+        mx,
+        forced: false,
+        enabled: true,
+        auto_enabled: true,
+        scope: "global",
+        domains: existing,
+        steps: enable.steps,
+        worker: enable.worker,
+        zone_id: enable.zone_id,
+      });
+    }
+  }
+
+  // 无 CF 自动启用：走 MX 检测后写入
   let mx;
   try {
     mx = await checkDomainMx(raw);
@@ -181,7 +245,7 @@ settings.post("/domains/import", async (c) => {
     );
   }
 
-  if (mx.message === "invalid domain" || !normalizeDomain(raw)) {
+  if (mx.message === "invalid domain") {
     return c.json({ error: "invalid domain" }, 400);
   }
 
@@ -195,9 +259,6 @@ settings.post("/domains/import", async (c) => {
       400
     );
   }
-
-  const user = c.get("user")!;
-  const userId = getUserId(c);
 
   if (user.role === "admin") {
     const row = await c.env.DB.prepare("SELECT value FROM settings WHERE key = 'EMAIL_DOMAINS'")
@@ -221,6 +282,7 @@ settings.post("/domains/import", async (c) => {
       domain: mx.domain,
       mx,
       forced: !mx.ok && !!body.force,
+      auto_enabled: false,
       scope: "global",
       domains: existing,
     });
@@ -262,6 +324,7 @@ settings.post("/domains/import", async (c) => {
     domain: mx.domain,
     mx,
     forced: !mx.ok && !!body.force,
+    auto_enabled: false,
     scope: "user",
     domains: owned.results.map((r) => r.domain_name),
   });

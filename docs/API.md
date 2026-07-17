@@ -896,27 +896,30 @@ Public DNS MX check (Google DoH) for whether the domain points at Cloudflare Ema
 
 #### `POST /api/settings/domains/import`
 
-Check MX, then append the domain to available domains when ready. JWT only.  
-Admin → global `EMAIL_DOMAINS`; regular user → `user_domains`.
+Import a domain. JWT only.
+
+- **Admin + CF credentials** (default `auto_enable: true`): enable Email Routing, set catch-all → Worker, then write `EMAIL_DOMAINS`.
+- **Admin without credentials** / `auto_enable: false`: MX check then write list (`force` skips MX).
+- **Regular user**: claim into `user_domains` after MX check.
 
 **Request:**
 
 ```json
-{ "domain": "example.com", "force": false }
+{ "domain": "example.com", "force": false, "auto_enable": true }
 ```
 
-- `force: true` — import even if MX is not ready (mail may not arrive until Email Routing + Worker route are configured).
-
-**Response (200):**
+**Response (200)** with auto-enable:
 
 ```json
 {
   "ok": true,
   "domain": "example.com",
-  "mx": { "ok": true, "message": "mx_ok", "...": "..." },
-  "forced": false,
+  "auto_enabled": true,
+  "enabled": true,
   "scope": "global",
-  "domains": ["example.com"]
+  "domains": ["example.com"],
+  "worker": "any-mail",
+  "steps": [{ "step": "set_catch_all", "ok": true, "detail": "..." }]
 }
 ```
 

@@ -7,7 +7,6 @@ import {
   getDomainMxGuide,
   checkDomainMx,
   importDomain,
-  autoEnableDomain,
   type MxCheckResult,
   type MxGuide,
   type AutoEnableStep,
@@ -58,7 +57,6 @@ export default function Settings() {
   const [mxResult, setMxResult] = useState<MxCheckResult | null>(null);
   const [checkingMx, setCheckingMx] = useState(false);
   const [importingDomain, setImportingDomain] = useState(false);
-  const [autoEnabling, setAutoEnabling] = useState(false);
   const [autoSteps, setAutoSteps] = useState<AutoEnableStep[] | null>(null);
   const [showGuide, setShowGuide] = useState(false);
 
@@ -128,49 +126,39 @@ export default function Settings() {
     const d = importDomainInput.trim().toLowerCase();
     if (!d) return;
     setImportingDomain(true);
-    try {
-      const res = await importDomain(d, force);
-      setMxResult(res.mx);
-      const merged = [...new Set([...allDomains, ...res.domains])];
-      setAllDomains(merged);
-      setEnabledDomains(merged);
-      setImportDomainInput("");
-      toast.success(
-        res.forced ? t("settings.domainImportedForced", { domain: res.domain }) : t("settings.domainImported", { domain: res.domain })
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : t("settings.domainImportFailed");
-      if (msg === "mx_not_ready") toast.error(t("settings.mxNotReady"));
-      else toast.error(msg);
-    } finally {
-      setImportingDomain(false);
-    }
-  };
-
-  const handleAutoEnable = async () => {
-    const d = importDomainInput.trim().toLowerCase();
-    if (!d) return;
-    setAutoEnabling(true);
     setAutoSteps(null);
     try {
-      const res = await autoEnableDomain(d);
-      setAutoSteps(res.steps ?? []);
+      // 默认 auto_enable=true：有 CF 凭据时自动开 Email Routing + catch-all
+      const res = await importDomain(d, { force, auto_enable: true });
+      if (res.steps) setAutoSteps(res.steps);
       if (res.mx) setMxResult(res.mx);
+      if (!res.ok) {
+        toast.error(
+          t(`settings.autoEnableErrors.${res.error}`, {
+            defaultValue: res.error || t("settings.domainImportFailed"),
+          })
+        );
+        return;
+      }
       if (res.domains?.length) {
         const merged = [...new Set([...allDomains, ...res.domains])];
         setAllDomains(merged);
         setEnabledDomains(merged);
       }
-      if (res.ok) {
+      setImportDomainInput("");
+      if (res.auto_enabled) {
         toast.success(t("settings.autoEnableOk", { domain: res.domain, worker: res.worker ?? "any-mail" }));
+      } else if (res.forced) {
+        toast.success(t("settings.domainImportedForced", { domain: res.domain }));
       } else {
-        toast.error(t(`settings.autoEnableErrors.${res.error}`, { defaultValue: res.error || t("settings.autoEnableFailed") }));
+        toast.success(t("settings.domainImported", { domain: res.domain }));
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t("settings.autoEnableFailed");
-      toast.error(t(`settings.autoEnableErrors.${msg}`, { defaultValue: msg }));
+      const msg = err instanceof Error ? err.message : t("settings.domainImportFailed");
+      if (msg === "mx_not_ready") toast.error(t("settings.mxNotReady"));
+      else toast.error(t(`settings.autoEnableErrors.${msg}`, { defaultValue: msg }));
     } finally {
-      setAutoEnabling(false);
+      setImportingDomain(false);
     }
   };
 
@@ -335,14 +323,6 @@ export default function Settings() {
                 {checkingMx ? t("settings.mxChecking") : t("settings.mxCheck")}
               </Button>
               <Button
-                size="sm"
-                disabled={autoEnabling || !importDomainInput.trim()}
-                onClick={handleAutoEnable}
-              >
-                {autoEnabling ? t("settings.autoEnabling") : t("settings.autoEnableBtn")}
-              </Button>
-              <Button
-                variant="outline"
                 size="sm"
                 disabled={importingDomain || !importDomainInput.trim()}
                 onClick={() => handleImportDomain(false)}
