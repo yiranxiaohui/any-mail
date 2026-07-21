@@ -114,9 +114,10 @@ app.post("/api/accounts/:id/sync", requireScope("accounts:write"), async (c) => 
 /** 同步单个用户的所有 Gmail/Outlook 账号 */
 async function syncUserAccounts(env: Env, userId: string) {
   const creds = await getOAuthCredentials(env, userId);
+  const now = new Date().toISOString();
   const accounts = await env.DB.prepare(
-    "SELECT * FROM accounts WHERE user_id = ? AND provider IN ('gmail', 'outlook')"
-  ).bind(userId).all<Account>();
+    "SELECT * FROM accounts WHERE user_id = ? AND provider IN ('gmail', 'outlook') AND (expires_at IS NULL OR expires_at >= ?)"
+  ).bind(userId, now).all<Account>();
 
   const results: { email: string; provider: string; synced: number; error?: string }[] = [];
 
@@ -142,12 +143,32 @@ async function syncUserAccounts(env: Env, userId: string) {
   return { ok: true, results };
 }
 
+/** 清理已过期账号及其邮件（expires_at < now） */
+async function cleanupExpiredAccounts(env: Env): Promise<number> {
+  const now = new Date().toISOString();
+
+  // 先删邮件，再删账号（与 DELETE /api/accounts/:id 一致）
+  await env.DB.prepare(
+    `DELETE FROM emails WHERE account_id IN (
+      SELECT id FROM accounts WHERE expires_at IS NOT NULL AND expires_at < ?
+    )`
+  ).bind(now).run();
+
+  const res = await env.DB.prepare(
+    "DELETE FROM accounts WHERE expires_at IS NOT NULL AND expires_at < ?"
+  ).bind(now).run();
+
+  return res.meta?.changes ?? 0;
+}
+
 /** 定时任务：遍历所有用户，逐个同步他们的账号 */
 async function syncAllUsers(env: Env) {
   // 一次性 join 出 (account, user_id)；按 user 分组迭代以每个用户用各自的 OAuth 凭证
+  // 跳过已过期账号（即将被 cleanup 删除）
+  const now = new Date().toISOString();
   const accounts = await env.DB.prepare(
-    "SELECT * FROM accounts WHERE provider IN ('gmail', 'outlook') ORDER BY user_id"
-  ).all<Account>();
+    "SELECT * FROM accounts WHERE provider IN ('gmail', 'outlook') AND (expires_at IS NULL OR expires_at >= ?) ORDER BY user_id"
+  ).bind(now).all<Account>();
 
   const byUser = new Map<string, Account[]>();
   for (const a of accounts.results) {
@@ -179,8 +200,9 @@ export default {
     await handleDomainEmail(message, env);
   },
 
-  // Cron Trigger: 定时轮询 Gmail / Outlook
+  // Cron Trigger: 清理过期账号 + 轮询 Gmail / Outlook
   async scheduled(_event: ScheduledEvent, env: Env) {
+    await cleanupExpiredAccounts(env);
     await syncAllUsers(env);
   },
 };

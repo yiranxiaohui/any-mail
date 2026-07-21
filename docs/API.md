@@ -439,7 +439,7 @@ Create a domain email account.
 | Field | Required | Description |
 |-------|----------|-------------|
 | `email` | Yes | Full email address (must contain `@`) |
-| `expires_at` | No | ISO datetime string, or `null` for permanent |
+| `expires_at` | No | ISO datetime string, or `null` for permanent. Expired accounts (and their emails) are auto-deleted by cron every minute |
 
 **Response (201):**
 
@@ -1157,6 +1157,7 @@ Empty list when no domains are configured. Same data as the admin-only `GET /api
 Manually trigger email sync for all Gmail and Outlook accounts.
 
 > This also runs automatically every minute via Cloudflare Cron Trigger.
+> The same cron first deletes accounts whose `expires_at` has passed (and all of their emails), then syncs Gmail/Outlook.
 
 **Response:**
 

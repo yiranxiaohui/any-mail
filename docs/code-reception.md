@@ -142,7 +142,7 @@ curl -X POST https://your-anymail.example.com/api/accounts \
 | 字段 | 必填 | 说明 |
 |---|---|---|
 | `email` | 是 | 完整邮箱地址。前缀建议加随机串避免冲突 |
-| `expires_at` | 否 | ISO 时间,null 或省略表示永久 |
+| `expires_at` | 否 | ISO 时间,null 或省略表示永久;到期后 cron 每分钟自动删除账号及邮件 |
 
 **200 / 201**:
 ```json
@@ -216,7 +216,7 @@ curl -X DELETE https://your-anymail.example.com/api/accounts/8f3e2a... \
   -H "Authorization: Bearer ak_xxxxx"
 ```
 
-同时删除该账号名下所有邮件。不主动删也没问题 —— `expires_at` 仅用于前端标记,**后端不会自动删除过期账号或其邮件**。若需要清理,自行调用本接口或在后台页面操作。
+同时删除该账号名下所有邮件。若设置了 `expires_at`,后端 cron(每分钟)会在到期后自动删除该账号及其邮件;也可随时手动调用本接口提前清理。
 
 ### 5.4 给邮箱打标签(可选,推荐多服务场景使用)
 
@@ -434,7 +434,7 @@ A: 可以,但需要先手动建一个通配别名账号(例如 `catchall@mail.ex
 A: `code_regex` 同时匹配 `text_body`、`html_body` 和 `subject`,任一命中即可。
 
 **Q: 邮件什么时候会被清理?**
-A: 目前不自动清理。`expires_at` 过期也只是标记,邮件仍保留。需要自己调用 `DELETE /api/accounts/:id` 或在后台手动删。
+A: 会。cron 每分钟清理一次:`expires_at` 已过期的账号及其邮件会被自动删除。也可随时调用 `DELETE /api/accounts/:id` 或在后台手动提前删。
 
 **Q: 能否用一把 key 管理多个域?**
 A: 可以。`EMAIL_DOMAINS` 是全局的,一个 `provider=domain` 的 key 能跨所有已配置的域创建/读取邮箱。

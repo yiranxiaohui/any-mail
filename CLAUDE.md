@@ -42,7 +42,7 @@ bunx tsc -b
 
 ### Backend (`/src`) — Hono on Cloudflare Workers
 
-- **`index.ts`** — Entry point. Exports three handlers: `fetch` (HTTP via Hono), `email` (Cloudflare Email Worker), `scheduled` (Cron Trigger every 1 min). Also inlines `GET /api/domains` and the sync endpoints.
+- **`index.ts`** — Entry point. Exports three handlers: `fetch` (HTTP via Hono), `email` (Cloudflare Email Worker), `scheduled` (Cron Trigger every 1 min: cleanup expired accounts, then poll Gmail/Outlook). Also inlines `GET /api/domains` and the sync endpoints.
 - **`auth.ts`** — Dual-mode auth:
   - **JWT** (HMAC-SHA256 via Web Crypto) for admin session.
   - **API keys** (`ak_<base64url>` prefix, SHA-256 hashed in DB) for external clients.
