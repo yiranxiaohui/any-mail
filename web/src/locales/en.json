@@ -54,6 +54,7 @@
     "signIn": "Sign in",
     "signingIn": "Signing in...",
     "invalidPassword": "Invalid email or password",
+    "networkError": "Network error, please check your connection and retry",
     "goReceive": "Receive code",
     "goRegister": "Create account"
   },

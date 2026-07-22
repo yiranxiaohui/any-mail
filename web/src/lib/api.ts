@@ -41,7 +41,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   const res = await fetch(`${BASE}${path}`, { ...init, headers });
 
-  if (res.status === 401) {
+  // 只有在原本携带 token 的请求上遇到 401 才视为“会话过期”，清理并跳回登录页。
+  // 登录/注册这类本就没有 token 的请求，401 是正常的“凭据不符”响应，
+  // 应让其落到下面的错误分支、抛出服务端真实报错，而不是强制整页跳转。
+  if (res.status === 401 && token) {
     localStorage.removeItem("anymail_token");
     localStorage.removeItem("anymail_user");
     window.location.href = "/login";

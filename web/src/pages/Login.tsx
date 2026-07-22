@@ -24,8 +24,18 @@ export default function Login() {
       const res = await apiLogin(email.trim(), password);
       login(res.token, res.user);
       navigate("/console");
-    } catch {
-      setError(t("login.invalidPassword"));
+    } catch (err) {
+      // 按错误类型分流，避免把网络/服务端错误一律误报成“密码错误”
+      if (err instanceof TypeError) {
+        // fetch 抛 TypeError：网络不可达 / CORS 等
+        setError(t("login.networkError"));
+      } else if (err instanceof Error && err.message === "invalid credentials") {
+        setError(t("login.invalidPassword"));
+      } else if (err instanceof Error && err.message) {
+        setError(err.message);
+      } else {
+        setError(t("login.invalidPassword"));
+      }
     } finally {
       setLoading(false);
     }

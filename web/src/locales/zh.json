@@ -54,6 +54,7 @@
     "signIn": "登录",
     "signingIn": "登录中...",
     "invalidPassword": "邮箱或密码错误",
+    "networkError": "网络错误，请检查网络后重试",
     "goReceive": "去接码",
     "goRegister": "注册账号"
   },
