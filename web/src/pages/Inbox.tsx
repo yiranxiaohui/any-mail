@@ -20,7 +20,7 @@ export default function Inbox() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [filterAccount, setFilterAccount] = useState(searchParams.get("account_id") || "all");
   const [filterProvider, setFilterProvider] = useState("");
-  const [searchTo, setSearchTo] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
 
@@ -35,7 +35,7 @@ export default function Inbox() {
       const params: Record<string, string | number> = { limit: ps, offset: (p - 1) * ps };
       if (filterAccount !== "all") params.account_id = filterAccount;
       if (filterProvider) params.provider = filterProvider;
-      if (searchTo) params.to = searchTo;
+      if (searchQuery) params.q = searchQuery;
       const data = await getEmails(params as Record<string, string>);
       setEmails(data.emails);
       setTotal(data.meta.total);
@@ -198,8 +198,8 @@ export default function Inbox() {
         <form onSubmit={handleSearch} className="flex flex-1 gap-2">
           <Input
             placeholder={t("inbox.searchPlaceholder")}
-            value={searchTo}
-            onChange={(e) => setSearchTo(e.target.value)}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="max-w-sm"
           />
           <Button type="submit" variant="outline" size="sm">

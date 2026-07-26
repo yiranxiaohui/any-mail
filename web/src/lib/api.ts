@@ -110,10 +110,11 @@ export function getOutlookReauthUrl(clientId: string) {
 }
 
 // Emails
-export function getEmails(params?: { account_id?: string; to?: string; limit?: number; offset?: number }) {
+export function getEmails(params?: { account_id?: string; to?: string; q?: string; limit?: number; offset?: number }) {
   const q = new URLSearchParams();
   if (params?.account_id) q.set("account_id", params.account_id);
   if (params?.to) q.set("to", params.to);
+  if (params?.q) q.set("q", params.q);
   if (params?.limit) q.set("limit", String(params.limit));
   if (params?.offset) q.set("offset", String(params.offset));
   const qs = q.toString();

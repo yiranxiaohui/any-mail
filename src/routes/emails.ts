@@ -11,6 +11,7 @@ emails.get("/", requireScope("emails:read"), async (c) => {
   const accountId = c.req.query("account_id");
   const providerQuery = c.req.query("provider");
   const to = c.req.query("to");
+  const q = c.req.query("q")?.trim();
   const limit = Math.min(parseInt(c.req.query("limit") ?? "50"), 100);
   const offset = parseInt(c.req.query("offset") ?? "0");
 
@@ -48,6 +49,25 @@ emails.get("/", requireScope("emails:read"), async (c) => {
     countSql += " AND to_address LIKE ?";
     params.push(`%${keyAddress}%`);
     countParams.push(`%${keyAddress}%`);
+  }
+  if (q) {
+    // 全文搜索走 FTS5（trigram 分词，支持中英文子串匹配）；
+    // trigram 要求查询词 ≥3 个字符，更短的回退多字段 LIKE
+    if ([...q].length >= 3) {
+      const phrase = `"${q.replaceAll('"', '""')}"`;
+      const cond = " AND rowid IN (SELECT rowid FROM emails_fts WHERE emails_fts MATCH ?)";
+      sql += cond;
+      countSql += cond;
+      params.push(phrase);
+      countParams.push(phrase);
+    } else {
+      const cond = " AND (subject LIKE ? OR from_address LIKE ? OR to_address LIKE ? OR text_body LIKE ?)";
+      sql += cond;
+      countSql += cond;
+      const like = `%${q}%`;
+      params.push(like, like, like, like);
+      countParams.push(like, like, like, like);
+    }
   }
 
   // 用 datetime() 归一化不同 provider 的时间戳格式（outlook 存 ISO，domain/gmail 存空格分隔），否则字节序会错排
