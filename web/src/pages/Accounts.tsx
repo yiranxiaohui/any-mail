@@ -34,7 +34,16 @@ export default function Accounts() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterProvider, setFilterProvider] = useState("");
   // "" = all, "__untagged__" = 未分组, 其它 = 具体 tag
-  const [filterTag, setFilterTag] = useState("");
+  // 存在 URL（?tag=）里：跳转到收件箱等页面再返回时筛选不丢，Groups 页的「查看」链接也能直达
+  const filterTag = searchParams.get("tag") ?? "";
+  const setFilterTag = (v: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (v) next.set("tag", v);
+      else next.delete("tag");
+      return next;
+    });
+  };
   // 当前选中的具体分组（创建/导入账号时自动归入）
   const activeGroupTag = filterTag && filterTag !== "__untagged__" ? filterTag : null;
   const [page, setPage] = useState(1);
