@@ -240,6 +240,7 @@
       "description": "在你的域名下创建邮箱地址（需要 Cloudflare Email Routing）",
       "placeholder": "user@yourdomain.com",
       "localPart": "用户名",
+      "random": "随机生成用户名",
       "expires": "有效期",
       "permanent": "永久",
       "1h": "1 小时",
