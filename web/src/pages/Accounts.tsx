@@ -11,6 +11,20 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import ProviderBadge from "@/components/ProviderBadge";
 import { toast } from "sonner";
 
+/** 生成可读的随机用户名：辅音+元音音节 ×3 + 两位数字，如 kavito42 */
+function randomLocalPart(): string {
+  const consonants = "bcdfghjklmnpqrstvwxyz";
+  const vowels = "aeiou";
+  const buf = new Uint32Array(8);
+  crypto.getRandomValues(buf);
+  let s = "";
+  for (let i = 0; i < 3; i++) {
+    s += consonants[buf[i]! % consonants.length];
+    s += vowels[buf[i + 3]! % vowels.length];
+  }
+  return s + String(buf[6]! % 10) + String(buf[7]! % 10);
+}
+
 export default function Accounts() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -376,6 +390,7 @@ export default function Accounts() {
                       onKeyDown={(e) => e.key === "Enter" && handleCreateDomain()}
                       className="flex-1"
                     />
+                    <RandomNameButton title={t("accounts.domain.random")} onClick={() => setNewEmail(randomLocalPart())} />
                     <span className="flex items-center text-sm text-muted-foreground">@</span>
                     <select
                       value={selectedDomain}
@@ -388,13 +403,24 @@ export default function Accounts() {
                     </select>
                   </div>
                 ) : (
-                  <Input
-                    type="email"
-                    placeholder={t("accounts.domain.placeholder")}
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleCreateDomain()}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      type="email"
+                      placeholder={t("accounts.domain.placeholder")}
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleCreateDomain()}
+                      className="flex-1"
+                    />
+                    <RandomNameButton
+                      title={t("accounts.domain.random")}
+                      onClick={() => {
+                        // 完整邮箱输入框：保留已填域名，只随机替换 @ 前的用户名
+                        const at = newEmail.indexOf("@");
+                        setNewEmail(at >= 0 ? randomLocalPart() + newEmail.slice(at) : randomLocalPart());
+                      }}
+                    />
+                  </div>
                 )}
                 <div className="flex items-center gap-3">
                   <label className="text-sm font-medium shrink-0">{t("accounts.domain.expires")}</label>
@@ -919,6 +945,27 @@ export default function Accounts() {
         </div>
       </Card>
     </div>
+  );
+}
+
+function RandomNameButton({ title, onClick }: { title: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className="shrink-0 rounded-lg border border-input bg-background px-3 py-2 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+    >
+      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="18" height="18" x="3" y="3" rx="3" />
+        <circle cx="8.5" cy="8.5" r="0.5" fill="currentColor" />
+        <circle cx="15.5" cy="8.5" r="0.5" fill="currentColor" />
+        <circle cx="12" cy="12" r="0.5" fill="currentColor" />
+        <circle cx="8.5" cy="15.5" r="0.5" fill="currentColor" />
+        <circle cx="15.5" cy="15.5" r="0.5" fill="currentColor" />
+      </svg>
+    </button>
   );
 }
 

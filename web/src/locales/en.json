@@ -240,6 +240,7 @@
       "description": "Create an email address on your domain (requires Cloudflare Email Routing)",
       "placeholder": "user@yourdomain.com",
       "localPart": "username",
+      "random": "Random username",
       "expires": "Expires",
       "permanent": "Permanent",
       "1h": "1 hour",
