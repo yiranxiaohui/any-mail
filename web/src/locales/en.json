@@ -236,6 +236,7 @@
     },
     "domain": {
       "tab": "Domain",
+      "willJoinGroup": "New accounts will be added to group “{{tag}}”",
       "description": "Create an email address on your domain (requires Cloudflare Email Routing)",
       "placeholder": "user@yourdomain.com",
       "localPart": "username",
@@ -261,6 +262,7 @@
     },
     "import": {
       "tab": "Bulk Import",
+      "willJoinGroup": "Imported accounts will be added to group “{{tag}}”",
       "description": "Import Outlook / Hotmail / Live accounts in bulk. One per line:",
       "format": "account----password----ssid----token",
       "placeholder": "user1@outlook.com----pass1----ssid1----token1\nuser2@hotmail.com----pass2----ssid2----token2",

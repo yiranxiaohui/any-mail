@@ -236,6 +236,7 @@
     },
     "domain": {
       "tab": "域名邮箱",
+      "willJoinGroup": "创建后将自动加入分组「{{tag}}」",
       "description": "在你的域名下创建邮箱地址（需要 Cloudflare Email Routing）",
       "placeholder": "user@yourdomain.com",
       "localPart": "用户名",
@@ -261,6 +262,7 @@
     },
     "import": {
       "tab": "批量导入",
+      "willJoinGroup": "导入的账户将自动加入分组「{{tag}}」",
       "description": "批量导入 Outlook / Hotmail / Live 账户，每行一个：",
       "format": "账号----密码----ssid----令牌",
       "placeholder": "user1@outlook.com----pass1----ssid1----token1\nuser2@hotmail.com----pass2----ssid2----token2",
