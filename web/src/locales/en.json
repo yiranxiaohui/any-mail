@@ -116,7 +116,7 @@
     "allAccounts": "All Accounts",
     "searchAccountsPlaceholder": "Search email or group...",
     "noMatchingAccounts": "No matching accounts",
-    "searchPlaceholder": "Search by recipient...",
+    "searchPlaceholder": "Search subject, body, sender, recipient...",
     "search": "Search",
     "loading": "Loading...",
     "noEmails": "No emails yet",

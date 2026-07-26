@@ -116,7 +116,7 @@
     "allAccounts": "所有账户",
     "searchAccountsPlaceholder": "搜索邮箱或分组...",
     "noMatchingAccounts": "未找到匹配的账户",
-    "searchPlaceholder": "按收件人搜索...",
+    "searchPlaceholder": "搜索主题、正文、发件人、收件人...",
     "search": "搜索",
     "loading": "加载中...",
     "noEmails": "暂无邮件",
