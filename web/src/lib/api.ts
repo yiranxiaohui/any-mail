@@ -192,19 +192,19 @@ export function getAccount(id: string) {
   return request<Account & { client_id?: string | null; refresh_token?: string | null }>(`/api/accounts/${id}`);
 }
 
-export function createDomainAccount(email: string, expiresAt?: string | null) {
+export function createDomainAccount(email: string, expiresAt?: string | null, tag?: string | null) {
   return request<{ ok: boolean; account: Account }>("/api/accounts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, expires_at: expiresAt ?? null }),
+    body: JSON.stringify({ email, expires_at: expiresAt ?? null, tag: tag ?? null }),
   });
 }
 
-export function importAccounts(text: string) {
+export function importAccounts(text: string, tag?: string | null) {
   return request<{ ok: boolean; total: number; success: number; results: { email: string; status: string }[] }>("/api/accounts/import", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, tag: tag ?? null }),
   });
 }
 

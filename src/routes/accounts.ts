@@ -190,7 +190,7 @@ accounts.post("/", requireScope("accounts:write"), async (c) => {
     return c.json({ error: "api key must be bound to provider=domain to create accounts" }, 403);
   }
 
-  const body = await c.req.json<{ email: string; expires_at?: string | null }>();
+  const body = await c.req.json<{ email: string; expires_at?: string | null; tag?: string | null }>();
   const email = body.email?.trim().toLowerCase();
   if (!email || !email.includes("@")) {
     return c.json({ error: "invalid email" }, 400);
@@ -220,11 +220,15 @@ accounts.post("/", requireScope("accounts:write"), async (c) => {
 
   const id = crypto.randomUUID();
   const expiresAt = body.expires_at ?? null;
+  const tag = typeof body.tag === "string" && body.tag.trim() ? body.tag.trim() : null;
   await c.env.DB.prepare(
-    "INSERT INTO accounts (id, user_id, provider, email, expires_at) VALUES (?, ?, 'domain', ?, ?)"
-  ).bind(id, userId, email, expiresAt).run();
+    "INSERT INTO accounts (id, user_id, provider, email, expires_at, tag) VALUES (?, ?, 'domain', ?, ?, ?)"
+  ).bind(id, userId, email, expiresAt, tag).run();
+  if (tag) {
+    await c.env.DB.prepare("INSERT OR IGNORE INTO tag_groups (user_id, name) VALUES (?, ?)").bind(userId, tag).run();
+  }
 
-  return c.json({ ok: true, account: { id, provider: "domain", email, expires_at: expiresAt } }, 201);
+  return c.json({ ok: true, account: { id, provider: "domain", email, expires_at: expiresAt, tag } }, 201);
 });
 
 /** 批量导入微软邮箱（outlook/hotmail） */
@@ -235,10 +239,11 @@ accounts.post("/import", requireScope("accounts:write"), async (c) => {
     return c.json({ error: "api key must be bound to provider=outlook to import accounts" }, 403);
   }
 
-  const body = await c.req.json<{ text: string }>();
+  const body = await c.req.json<{ text: string; tag?: string | null }>();
   if (!body.text?.trim()) {
     return c.json({ error: "empty input" }, 400);
   }
+  const tag = typeof body.tag === "string" && body.tag.trim() ? body.tag.trim() : null;
 
   const lines = body.text.trim().split("\n").filter((l) => l.trim());
   const results: { email: string; status: string }[] = [];
@@ -280,10 +285,10 @@ accounts.post("/import", requireScope("accounts:write"), async (c) => {
     try {
       const id = existing?.id ?? crypto.randomUUID();
       await c.env.DB.prepare(
-        `INSERT INTO accounts (id, user_id, provider, email, password, client_id, refresh_token)
-         VALUES (?, ?, 'outlook', ?, ?, ?, ?)
-         ON CONFLICT(email) DO UPDATE SET password=?, client_id=?, refresh_token=?, updated_at=datetime('now')`
-      ).bind(id, userId, lowered, password || null, clientId, refreshToken, password || null, clientId, refreshToken).run();
+        `INSERT INTO accounts (id, user_id, provider, email, password, client_id, refresh_token, tag)
+         VALUES (?, ?, 'outlook', ?, ?, ?, ?, ?)
+         ON CONFLICT(email) DO UPDATE SET password=?, client_id=?, refresh_token=?, tag=COALESCE(?, tag), updated_at=datetime('now')`
+      ).bind(id, userId, lowered, password || null, clientId, refreshToken, tag, password || null, clientId, refreshToken, tag).run();
       results.push({ email, status: "ok" });
     } catch (err) {
       results.push({ email, status: err instanceof Error ? err.message : "insert failed" });
@@ -291,6 +296,9 @@ accounts.post("/import", requireScope("accounts:write"), async (c) => {
   }
 
   const success = results.filter((r) => r.status === "ok").length;
+  if (tag && success > 0) {
+    await c.env.DB.prepare("INSERT OR IGNORE INTO tag_groups (user_id, name) VALUES (?, ?)").bind(userId, tag).run();
+  }
   return c.json({ ok: true, total: lines.length, success, results });
 });
 

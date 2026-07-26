@@ -35,6 +35,8 @@ export default function Accounts() {
   const [filterProvider, setFilterProvider] = useState("");
   // "" = all, "__untagged__" = 未分组, 其它 = 具体 tag
   const [filterTag, setFilterTag] = useState("");
+  // 当前选中的具体分组（创建/导入账号时自动归入）
+  const activeGroupTag = filterTag && filterTag !== "__untagged__" ? filterTag : null;
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
@@ -140,12 +142,13 @@ export default function Accounts() {
     setCreating(true);
     try {
       const expiresAt = getExpiresAt();
-      const res = await createDomainAccount(email, expiresAt);
+      const res = await createDomainAccount(email, expiresAt, activeGroupTag);
       setAccounts((prev) => [{ ...res.account, expires_at: expiresAt, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, ...prev]);
       setNewEmail("");
       setExpiry("permanent");
       setDialogOpen(false);
       toast.success(t("accounts.domain.created", { email: res.account.email }));
+      if (activeGroupTag) fetchTags();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("accounts.domain.createFailed"));
     } finally {
@@ -157,12 +160,13 @@ export default function Accounts() {
     if (!importText.trim()) return;
     setImporting(true);
     try {
-      const res = await importAccounts(importText);
+      const res = await importAccounts(importText, activeGroupTag);
       toast.success(t("accounts.import.importResult", { success: res.success, total: res.total }));
       if (res.success > 0) {
         setImportText("");
         setDialogOpen(false);
         fetchAccounts();
+        if (activeGroupTag) fetchTags();
       }
       const failed = res.results.filter((r) => r.status !== "ok");
       if (failed.length > 0) {
@@ -351,6 +355,9 @@ export default function Accounts() {
             <TabsContent value="domain">
               <div className="space-y-4 pt-2">
                 <p className="text-sm text-muted-foreground">{t("accounts.domain.description")}</p>
+                {activeGroupTag && (
+                  <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">{t("accounts.domain.willJoinGroup", { tag: activeGroupTag })}</p>
+                )}
                 {domains.length > 0 ? (
                   <div className="flex gap-2">
                     <Input
@@ -450,6 +457,9 @@ export default function Accounts() {
             <TabsContent value="import">
               <div className="space-y-4 pt-2">
                 <p className="text-sm text-muted-foreground">{t("accounts.import.description")}</p>
+                {activeGroupTag && (
+                  <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">{t("accounts.import.willJoinGroup", { tag: activeGroupTag })}</p>
+                )}
                 <code className="block rounded-md bg-muted px-3 py-2 text-xs font-mono">
                   {t("accounts.import.format")}
                 </code>
