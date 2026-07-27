@@ -265,11 +265,11 @@ export function updateSettings(data: Record<string, string>) {
 // OAuth URLs
 // Domains
 export function getDomains() {
-  return request<{ domains: { name: string }[] }>("/api/settings/domains");
+  return request<{ domains: { name: string }[] }>("/api/domains");
 }
 
 export function syncDomainsFromCloudflare() {
-  return request<{ ok: boolean; domains: string[] }>("/api/settings/domains/sync", { method: "POST" });
+  return request<{ ok: boolean; domains: string[] }>("/api/user-domains/sync", { method: "POST" });
 }
 
 export interface MxRecord {
@@ -297,11 +297,11 @@ export interface MxGuide {
 }
 
 export function getDomainMxGuide() {
-  return request<MxGuide>("/api/settings/domains/guide");
+  return request<MxGuide>("/api/user-domains/guide");
 }
 
 export function checkDomainMx(domain: string) {
-  return request<MxCheckResult>("/api/settings/domains/check-mx", {
+  return request<MxCheckResult>("/api/user-domains/check-mx", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ domain }),
@@ -312,24 +312,6 @@ export interface AutoEnableStep {
   step: string;
   ok: boolean;
   detail?: string;
-}
-
-export interface AutoEnableResult {
-  ok: boolean;
-  domain: string;
-  enabled?: boolean;
-  imported?: boolean;
-  domains?: string[];
-  mx?: MxCheckResult | null;
-  steps: AutoEnableStep[];
-  worker?: string;
-  zone_id?: string;
-  zone_status?: string;
-  nameservers?: string[];
-  pending_ns?: boolean;
-  zone_created?: boolean;
-  error?: string;
-  reason?: string;
 }
 
 export type DomainImportResult = {
@@ -355,29 +337,13 @@ export function importDomain(
   domain: string,
   opts?: { force?: boolean; auto_enable?: boolean; create_zone?: boolean },
 ) {
-  return request<DomainImportResult>("/api/settings/domains/import", {
+  return request<DomainImportResult>("/api/user-domains/import", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       domain,
       force: opts?.force ?? false,
       auto_enable: opts?.auto_enable ?? true,
-      create_zone: opts?.create_zone ?? true,
-    }),
-  });
-}
-
-export function autoEnableDomain(
-  domain: string,
-  opts?: { import?: boolean; force_import?: boolean; create_zone?: boolean },
-) {
-  return request<AutoEnableResult>("/api/settings/domains/auto-enable", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      domain,
-      import: opts?.import ?? true,
-      force_import: opts?.force_import ?? true,
       create_zone: opts?.create_zone ?? true,
     }),
   });
