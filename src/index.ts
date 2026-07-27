@@ -65,14 +65,13 @@ app.route("/api/settings", settingsRoute);
 app.route("/api/keys", apiKeysRoute);
 app.route("/api/user-domains", userDomainsRoute);
 
-// 公开域名列表（系统级，所有登录用户可见，API key 可通过 domains:read 访问）
+// 当前用户可用域名（JWT 或 API key 均按所属用户返回；API key 需 domains:read）
 app.get("/api/domains", requireScope("domains:read"), async (c) => {
-  const row = await c.env.DB.prepare("SELECT value FROM settings WHERE key = 'EMAIL_DOMAINS'")
-    .first<{ value: string }>();
-  const domains = row?.value
-    ? row.value.split(",").map((d) => d.trim()).filter(Boolean).map((name) => ({ name }))
-    : [];
-  return c.json({ domains });
+  const userId = getUserId(c);
+  const rows = await c.env.DB.prepare(
+    "SELECT domain_name FROM user_domains WHERE user_id = ? ORDER BY domain_name"
+  ).bind(userId).all<{ domain_name: string }>();
+  return c.json({ domains: rows.results.map((r) => ({ name: r.domain_name })) });
 });
 
 // 手动触发同步（当前用户的所有账号）— 仅限 JWT

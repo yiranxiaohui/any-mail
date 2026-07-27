@@ -417,20 +417,6 @@ settings.put("/", async (c) => {
   return c.json({ ok: true });
 });
 
-/** 获取可用域名列表：admin 全局 EMAIL_DOMAINS + 当前用户在 user_domains 里声明的 */
-settings.get("/domains", async (c) => {
-  const userId = getUserId(c);
-  const [globalRow, userRows] = await c.env.DB.batch([
-    c.env.DB.prepare("SELECT value FROM settings WHERE key = 'EMAIL_DOMAINS'"),
-    c.env.DB.prepare("SELECT domain_name FROM user_domains WHERE user_id = ?").bind(userId),
-  ]);
-  const globalValue = (globalRow?.results[0] as { value: string } | undefined)?.value ?? "";
-  const globals = globalValue.split(",").map((d) => d.trim().toLowerCase()).filter(Boolean);
-  const owned = ((userRows?.results ?? []) as { domain_name: string }[]).map((r) => r.domain_name.toLowerCase());
-  const all = Array.from(new Set([...globals, ...owned])).sort();
-  return c.json({ domains: all.map((name) => ({ name })) });
-});
-
 /** 从 Cloudflare API 同步域名到 EMAIL_DOMAINS 配置 — admin only */
 settings.post("/domains/sync", requireAdmin(), async (c) => {
   const rows = await c.env.DB.prepare(
