@@ -25,7 +25,7 @@ AnyMail 提供一套基于 API key 的接口,供外部程序(注册脚本、自�
 
 ### 2.1 配置域名
 
-在 AnyMail 管理后台 → Settings,配置 `EMAIL_DOMAINS`(或从 Cloudflare 同步),例如 `mail.example.com`。确保该域名已在 Cloudflare 开启 Email Routing,并将 catch-all 指向当前 Worker。
+域名归属现在是按用户的:登录 AnyMail 管理后台 → 「我的域名」,声明或导入一个域名(如 `mail.example.com`),导入时可自动检测/开启 Email Routing(管理员且已配置 Cloudflare 凭据时还能一键建 Zone + 开启收信 + 设置 catch-all)。确保该域名最终在 Cloudflare 开启了 Email Routing,并将 catch-all 指向当前 Worker。此域名只归属声明它的用户,`provider=domain` 的 key 只能在其所属用户已声明的域名下创建/读取邮箱。
 
 ### 2.2 创建 API key
 
@@ -123,7 +123,7 @@ curl https://your-anymail.example.com/api/domains \
 { "domains": [{ "name": "mail.example.com" }, { "name": "alt.example.com" }] }
 ```
 
-用途:管理员在后台加 / 删域名后,客户端不需要改配置即可感知。若域名长期稳定,直接硬编码即可。
+返回的是该 key 所属用户在「我的域名」下已声明的域名列表(按用户隔离,不是全局列表)。用途:该用户在后台加 / 删域名后,客户端不需要改配置即可感知。若域名长期稳定,直接硬编码即可。
 
 ### 5.1 创建临时邮箱
 
@@ -437,7 +437,7 @@ A: `code_regex` 同时匹配 `text_body`、`html_body` 和 `subject`,任一命�
 A: 会。cron 每分钟清理一次:`expires_at` 已过期的账号及其邮件会被自动删除。也可随时调用 `DELETE /api/accounts/:id` 或在后台手动提前删。
 
 **Q: 能否用一把 key 管理多个域?**
-A: 可以。`EMAIL_DOMAINS` 是全局的,一个 `provider=domain` 的 key 能跨所有已配置的域创建/读取邮箱。
+A: 可以,但仅限该 key 所属用户在「我的域名」下已声明的域名 —— 一个 `provider=domain` 的 key 能跨该用户名下所有已声明的域创建/读取邮箱,不再有跨用户的全局域名列表。
 
 **Q: 同一把 key 同时给多个业务收码,怎么避免清理时误删?**
 A: 用 `tag` 给每个邮箱打上业务名(见 5.4),清理时 `GET /api/accounts?tag=service-a` 先拉出属于该业务的邮箱 id,再逐个 `DELETE`。或者按 `tag=__untagged__` 清理遗留的未分组邮箱。
