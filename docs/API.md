@@ -40,7 +40,7 @@ API keys rejected at route level return `403`:
 | `emails:delete` | `DELETE /api/emails/:id` |
 | `accounts:read` | List / get accounts |
 | `accounts:write` | Create / import / edit / reauth / sync / delete accounts |
-| `domains:read` | `GET /api/domains` (list configured email domains) |
+| `domains:read` | `GET /api/domains` (list the key's owning user's claimed domains) |
 | `*` | All of the above |
 
 ### Provider restriction
@@ -783,7 +783,6 @@ Update settings. Only allowed keys are accepted; others are silently ignored.
 |-----|-------------|
 | `ADMIN_PASSWORD` | Admin login password |
 | `RESEND_API_KEY` | Resend API key for sending emails |
-| `EMAIL_DOMAINS` | Comma-separated list of managed email domains |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token (for domain sync) |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (for domain sync) |
 | `GMAIL_CLIENT_ID` | Google OAuth Client ID |
@@ -806,51 +805,68 @@ Update settings. Only allowed keys are accepted; others are silently ignored.
 { "ok": true }
 ```
 
-#### `GET /api/settings/domains`
+---
 
-Return the list of configured email domains (parsed from the `EMAIL_DOMAINS` setting).
+### User Domains
+
+> All `/api/user-domains` endpoints are **JWT-only** (API keys are rejected). Domain ownership lives entirely in the `user_domains` table — there is no global domain list. Each endpoint operates on the calling user's own rows unless noted otherwise.
+
+#### `GET /api/user-domains`
+
+List domains claimed by the current user.
 
 **Response:**
 
 ```json
 {
   "domains": [
-    { "name": "example.com" },
-    { "name": "mail.example.com" }
+    { "domain_name": "example.com", "created_at": "2026-07-20T08:00:00.000Z" },
+    { "domain_name": "mail.example.com", "created_at": "2026-07-21T09:00:00.000Z" }
   ]
 }
 ```
 
-Empty list when `EMAIL_DOMAINS` is unset.
+#### `POST /api/user-domains`
 
-#### `POST /api/settings/domains/sync`
+Claim a domain name for the current user (no MX check — just a name reservation).
 
-Fetch zones (and MX subdomain records) from the Cloudflare API and overwrite `EMAIL_DOMAINS`. Uses `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` from settings (falls back to Worker env vars).
-
-**Response (200):**
+**Request:**
 
 ```json
-{
-  "ok": true,
-  "domains": ["example.com", "mail.example.com"]
-}
+{ "name": "example.com" }
 ```
 
-**Response (400):**
+**Response (201):**
 
 ```json
-{ "error": "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required." }
+{ "ok": true, "name": "example.com" }
 ```
 
-**Response (500):**
+**Response (409)** — already claimed by another user, or equal to `SHARED_INBOX_DOMAIN`:
 
 ```json
-{ "error": "<cloudflare api error message>" }
+{ "error": "domain already claimed by another user" }
 ```
 
-#### `GET /api/settings/domains/guide`
+#### `DELETE /api/user-domains/:name`
 
-Return the MX setup guide for Cloudflare Email Routing (required MX table, steps, notes). JWT only.
+Release a domain claimed by the current user. Fails if the user still has `provider=domain` accounts on it (delete those first).
+
+**Response:**
+
+```json
+{ "ok": true }
+```
+
+**Response (409)**:
+
+```json
+{ "error": "3 mailbox(es) still use this domain — delete them first" }
+```
+
+#### `GET /api/user-domains/guide`
+
+Return the MX setup guide for Cloudflare Email Routing (required MX table, steps, notes).
 
 **Response (200):**
 
@@ -866,9 +882,9 @@ Return the MX setup guide for Cloudflare Email Routing (required MX table, steps
 }
 ```
 
-#### `POST /api/settings/domains/check-mx`
+#### `POST /api/user-domains/check-mx`
 
-Public DNS MX check (Google DoH) for whether the domain points at Cloudflare Email Routing. JWT only.
+Public DNS MX check (Google DoH) for whether the domain points at Cloudflare Email Routing.
 
 **Request:**
 
@@ -894,13 +910,12 @@ Public DNS MX check (Google DoH) for whether the domain points at Cloudflare Ema
 
 `ok` is `true` when at least one Cloudflare Email Routing MX is present.
 
-#### `POST /api/settings/domains/import`
+#### `POST /api/user-domains/import`
 
-Import a domain. JWT only.
+Claim a domain into the current user's `user_domains`, optionally auto-enabling Cloudflare Email Routing for it.
 
-- **Admin + CF credentials** (default `auto_enable: true`, `create_zone: true`): create zone on the **host** Cloudflare account (the one that deploys any-mail / Account ID in settings) if missing; if zone is not `active`, return `pending_ns` + `nameservers`; otherwise enable Email Routing, set catch-all → Worker on that host account, write `EMAIL_DOMAINS`. User personal CF accounts cannot target this Worker.
-- **Admin without credentials** / `auto_enable: false`: MX check then write list (`force` skips MX).
-- **Regular user**: claim into `user_domains` after MX check.
+- **Admin + CF credentials on the host account** (default `auto_enable: true`, `create_zone: true`): create a zone on the **host** Cloudflare account (the one that deploys any-mail / Account ID in settings) if missing; if the zone is not `active`, return `pending_ns` + `nameservers`; otherwise enable Email Routing, set catch-all → Worker on that host account, then claim the domain into the caller's `user_domains`. Personal CF accounts of other users cannot target this Worker.
+- **Admin without credentials, `auto_enable: false`, or a regular user**: MX check then claim into `user_domains` (`force` skips the MX check).
 
 **Request:**
 
@@ -916,7 +931,7 @@ Import a domain. JWT only.
   "domain": "example.com",
   "auto_enabled": true,
   "enabled": true,
-  "scope": "global",
+  "scope": "user",
   "domains": ["example.com"],
   "worker": "any-mail",
   "zone_id": "...",
@@ -924,6 +939,8 @@ Import a domain. JWT only.
   "steps": [{ "step": "set_catch_all", "ok": true, "detail": "..." }]
 }
 ```
+
+`domains` is the caller's full list of claimed domains after the write, not a global list.
 
 **Response (200)** waiting for nameservers (zone created or not yet active):
 
@@ -945,58 +962,44 @@ Import a domain. JWT only.
 }
 ```
 
-#### `POST /api/settings/domains/auto-enable`
-
-**Admin only.** Full-host onboarding on the **host** Cloudflare account (Worker deploy account):
-
-1. Find zone; if missing and `create_zone` (default true), create full zone  
-2. If zone status ≠ `active`, return `pending_ns` + `nameservers` (user must set registrar NS)  
-3. Enable Email Routing (writes MX)  
-4. Set catch-all → Worker (`any-mail` or `CLOUDFLARE_EMAIL_WORKER`)  
-5. Optionally append to `EMAIL_DOMAINS` (default `import: true`)
-
-Requires `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` (settings or env). Token needs **Zone:Edit** (create), Zone:Read, and Email Routing Edit.
-
-**Request:**
-
-```json
-{ "domain": "example.com", "import": true, "force_import": true, "create_zone": true }
-```
-
-**Response (200)** success:
+**Response (200)** MX-only path (no auto-enable — admin without CF credentials, `auto_enable: false`, or a regular user):
 
 ```json
 {
   "ok": true,
   "domain": "example.com",
-  "enabled": true,
-  "imported": true,
-  "domains": ["example.com"],
-  "worker": "any-mail",
-  "zone_id": "...",
-  "zone_status": "active",
-  "steps": [
-    { "step": "find_zone", "ok": true, "detail": "..." },
-    { "step": "zone_active", "ok": true, "detail": "active" },
-    { "step": "enable_routing", "ok": true, "detail": "..." },
-    { "step": "set_catch_all", "ok": true, "detail": "catch-all → worker any-mail" }
-  ]
+  "mx": { "domain": "example.com", "ok": true, "message": "mx_ok" },
+  "forced": false,
+  "auto_enabled": false,
+  "scope": "user",
+  "domains": ["example.com"]
 }
 ```
 
-**Response (200)** business failure (still 200 so clients can show `steps`):
+**Response (400)** when MX not ready and `force` is false:
+
+```json
+{ "error": "mx_not_ready", "message": "mx_empty", "mx": { "...": "..." } }
+```
+
+**Response (409)** — already claimed by another user, or equal to `SHARED_INBOX_DOMAIN`:
+
+```json
+{ "error": "domain already claimed by another user" }
+```
+
+#### `POST /api/user-domains/sync`
+
+**Admin only** (`requireAdmin()`). Fetch zones (and MX subdomain records) from the Cloudflare API and claim them into the **admin's own** `user_domains` — it never touches other users' domains. Uses `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` from settings (falls back to Worker env vars).
+
+**Response (200):**
 
 ```json
 {
-  "ok": false,
-  "error": "zone_not_found",
-  "domain": "example.com",
-  "worker": "any-mail",
-  "steps": [{ "step": "find_zone", "ok": false, "detail": "zone not found in this Cloudflare account" }]
+  "ok": true,
+  "domains": ["example.com", "mail.example.com"]
 }
 ```
-
-`error` values: `zone_not_found` | `create_zone_failed` | `pending_ns` | `get_routing_failed` | `enable_routing_failed` | `get_catch_all_failed` | `set_catch_all_failed`.
 
 **Response (400):**
 
@@ -1004,10 +1007,10 @@ Requires `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` (settings or env). Tok
 { "error": "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required." }
 ```
 
-**Response (400)** when MX not ready and `force` is false:
+**Response (500):**
 
 ```json
-{ "error": "mx_not_ready", "message": "mx_empty", "mx": { "...": "..." } }
+{ "error": "<cloudflare api error message>" }
 ```
 
 ---
@@ -1131,7 +1134,7 @@ Revoke (delete) an API key. Subsequent requests using it return `401`.
 
 #### `GET /api/domains`
 
-Return the list of configured email domains. Intended for external clients (e.g. code-reception scripts) that need to discover which domains they can create mailboxes under.
+Return the domains claimed (in `user_domains`) by the calling user — for a JWT call that's the logged-in user, for an API key it's the user who owns the key. Intended for external clients (e.g. code-reception scripts) that need to discover which domains they can create mailboxes under. This is a per-user view, not a global domain list.
 
 **Required scope:** `domains:read`
 
@@ -1146,7 +1149,7 @@ Return the list of configured email domains. Intended for external clients (e.g.
 }
 ```
 
-Empty list when no domains are configured. Same data as the admin-only `GET /api/settings/domains`, but exposed through a dedicated scope so API keys can call it without touching settings.
+Empty list when the calling user hasn't claimed any domains yet — claim domains via `POST /api/user-domains` or `POST /api/user-domains/import` (JWT only).
 
 ---
 
@@ -1205,11 +1208,16 @@ Manually trigger email sync for all Gmail and Outlook accounts.
 | GET | `/api/oauth/outlook/pkce-callback` | No | Outlook PKCE callback |
 | GET | `/api/settings` | Yes | Get settings (JWT only) |
 | PUT | `/api/settings` | Yes | Update settings (JWT only) |
-| GET | `/api/settings/domains` | Yes | List configured email domains (JWT only) |
-| POST | `/api/settings/domains/sync` | Yes | Sync domains from Cloudflare (JWT only) |
+| GET | `/api/user-domains` | Yes | List current user's claimed domains (JWT only) |
+| POST | `/api/user-domains` | Yes | Claim a domain name (JWT only) |
+| DELETE | `/api/user-domains/:name` | Yes | Release a claimed domain (JWT only) |
+| GET | `/api/user-domains/guide` | Yes | MX setup guide for Cloudflare Email Routing (JWT only) |
+| POST | `/api/user-domains/check-mx` | Yes | Check a domain's MX records (JWT only) |
+| POST | `/api/user-domains/import` | Yes | Claim a domain, optionally auto-enabling Email Routing (JWT only) |
+| POST | `/api/user-domains/sync` | Yes | Sync domains from Cloudflare into own user_domains (admin only) |
 | GET | `/api/keys` | Yes | List API keys (JWT only) |
 | POST | `/api/keys` | Yes | Create API key (JWT only) |
 | PATCH | `/api/keys/:id` | Yes | Update API key (JWT only) |
 | DELETE | `/api/keys/:id` | Yes | Revoke API key (JWT only) |
-| GET | `/api/domains` | Yes | List configured email domains (scope: `domains:read`) |
+| GET | `/api/domains` | Yes | List current user's claimed domains (scope: `domains:read`) |
 | POST | `/api/sync` | Yes | Trigger email sync for all accounts (JWT only) |
