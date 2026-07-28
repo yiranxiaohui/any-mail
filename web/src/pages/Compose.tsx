@@ -58,7 +58,7 @@ export default function Compose() {
       await sendEmail({ from, to, subject, text: body });
       clearDraft();
       toast.success(t("compose.sent"));
-      navigate("/console");
+      navigate("/console?box=sent");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("compose.sendFailed"));
     } finally {

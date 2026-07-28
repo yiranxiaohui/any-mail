@@ -121,7 +121,9 @@
     "loading": "Loading...",
     "noEmails": "No emails yet",
     "noEmailsHint": "Emails will appear here once received",
-    "noSubject": "(no subject)"
+    "noSubject": "(no subject)",
+    "tabInbox": "Inbox",
+    "tabSent": "Sent"
   },
   "email": {
     "from": "From",

@@ -10,6 +10,7 @@ emails.get("/", requireScope("emails:read"), async (c) => {
   const userId = getUserId(c);
   const accountId = c.req.query("account_id");
   const providerQuery = c.req.query("provider");
+  const box = c.req.query("box");
   const to = c.req.query("to");
   const q = c.req.query("q")?.trim();
   const limit = Math.min(parseInt(c.req.query("limit") ?? "50"), 100);
@@ -37,6 +38,14 @@ emails.get("/", requireScope("emails:read"), async (c) => {
     countSql += " AND provider = ?";
     params.push(provider);
     countParams.push(provider);
+  } else if (box === "sent") {
+    // 已发送视图：只看通过 Resend 发出的
+    sql += " AND provider = 'resend'";
+    countSql += " AND provider = 'resend'";
+  } else {
+    // 收件视图（默认）：排除已发送
+    sql += " AND provider != 'resend'";
+    countSql += " AND provider != 'resend'";
   }
   if (to) {
     sql += " AND to_address LIKE ?";
