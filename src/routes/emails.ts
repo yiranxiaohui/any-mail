@@ -212,14 +212,26 @@ emails.post("/send", requireScope("emails:send"), async (c) => {
 
   const result = await res.json<{ id: string }>();
 
-  // 保存到已发送记录
-  const id = crypto.randomUUID();
-  await c.env.DB.prepare(
-    `INSERT INTO emails (id, user_id, account_id, message_id, provider, from_address, to_address, subject, text_body, html_body, raw_headers, received_at)
-     VALUES (?, ?, '', ?, 'resend', ?, ?, ?, ?, ?, '{}', datetime('now'))`
-  ).bind(id, userId, result.id, body.from, body.to, body.subject, body.text || "", body.html || "").run();
+  // 保存到已发送记录：account_id 有外键约束，需解析发件人对应的账号；
+  // 发送本身已成功，入库失败只降级为 saved:false，不能把成功变 500
+  let saved = false;
+  try {
+    const acct = await c.env.DB.prepare(
+      "SELECT id FROM accounts WHERE user_id = ? AND email = ? COLLATE NOCASE"
+    ).bind(userId, body.from.trim()).first<{ id: string }>();
+    if (acct) {
+      const id = crypto.randomUUID();
+      await c.env.DB.prepare(
+        `INSERT INTO emails (id, user_id, account_id, message_id, provider, from_address, to_address, subject, text_body, html_body, raw_headers, received_at)
+         VALUES (?, ?, ?, ?, 'resend', ?, ?, ?, ?, ?, '{}', datetime('now'))`
+      ).bind(id, userId, acct.id, result.id, body.from, body.to, body.subject, body.text || "", body.html || "").run();
+      saved = true;
+    }
+  } catch (err) {
+    console.error("failed to save sent email record:", err);
+  }
 
-  return c.json({ ok: true, id: result.id });
+  return c.json({ ok: true, id: result.id, saved });
 });
 
 /** 删除邮件 */
