@@ -83,7 +83,13 @@ export default function EmailDetail() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate(`/console/compose?to=${encodeURIComponent(email.from_address)}&from=${encodeURIComponent(email.to_address)}&subject=${encodeURIComponent(`Re: ${email.subject}`)}`)}
+          onClick={() => {
+            // 已发送（resend）邮件：from 是自己、to 是对方，回复方向与收件相反
+            const isSent = email.provider === "resend";
+            const replyTo = isSent ? email.to_address : email.from_address;
+            const replyFrom = isSent ? email.from_address : email.to_address;
+            navigate(`/console/compose?to=${encodeURIComponent(replyTo)}&from=${encodeURIComponent(replyFrom)}&subject=${encodeURIComponent(`Re: ${email.subject}`)}`);
+          }}
         >
           <svg className="mr-1.5 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="9 17 4 12 9 7" />
