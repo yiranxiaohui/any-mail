@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { sendEmail } from "@/lib/api";
@@ -7,17 +7,46 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { loadDraft, saveDraft, clearDraft } from "@/lib/composeDraft";
 
 export default function Compose() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [from, setFrom] = useState(searchParams.get("from") || "");
-  const [to, setTo] = useState(searchParams.get("to") || "");
-  const [subject, setSubject] = useState(searchParams.get("subject") || "");
-  const [body, setBody] = useState("");
+  const hasParams =
+    searchParams.has("from") || searchParams.has("to") || searchParams.has("subject");
+  const [initialDraft] = useState(() => (hasParams ? null : loadDraft()));
+
+  const [from, setFrom] = useState(searchParams.get("from") || initialDraft?.from || "");
+  const [to, setTo] = useState(searchParams.get("to") || initialDraft?.to || "");
+  const [subject, setSubject] = useState(
+    searchParams.get("subject") || initialDraft?.subject || ""
+  );
+  const [body, setBody] = useState(initialDraft?.body || "");
   const [sending, setSending] = useState(false);
+  const [savedAt, setSavedAt] = useState<string | null>(initialDraft?.savedAt || null);
+
+  const skipFirstSave = useRef(true);
+  useEffect(() => {
+    if (skipFirstSave.current) {
+      skipFirstSave.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      const saved = saveDraft({ from, to, subject, body });
+      setSavedAt(saved ? saved.savedAt : null);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [from, to, subject, body]);
+
+  const handleSaveDraft = () => {
+    const saved = saveDraft({ from, to, subject, body });
+    if (saved) {
+      setSavedAt(saved.savedAt);
+      toast.success(t("compose.draftSaved"));
+    }
+  };
 
   const handleSend = async () => {
     if (!from || !to || !subject) {
@@ -27,6 +56,7 @@ export default function Compose() {
     setSending(true);
     try {
       await sendEmail({ from, to, subject, text: body });
+      clearDraft();
       toast.success(t("compose.sent"));
       navigate("/console");
     } catch (err) {
@@ -88,7 +118,20 @@ export default function Compose() {
               onChange={(e) => setBody(e.target.value)}
             />
           </div>
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-3">
+            {savedAt && (
+              <span className="text-xs text-muted-foreground">
+                {t("compose.autoSaved", {
+                  time: new Date(savedAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
+                })}
+              </span>
+            )}
+            <Button variant="outline" onClick={handleSaveDraft} disabled={sending}>
+              {t("compose.saveDraft")}
+            </Button>
             <Button onClick={handleSend} disabled={sending}>
               {sending ? (
                 <>
