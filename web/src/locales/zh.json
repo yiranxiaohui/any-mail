@@ -121,6 +121,8 @@
     "loading": "加载中...",
     "noEmails": "暂无邮件",
     "noEmailsHint": "收到邮件后将显示在这里",
+    "noSent": "暂无已发送邮件",
+    "noSentHint": "发出的邮件将显示在这里",
     "noSubject": "(无主题)",
     "tabInbox": "收件箱",
     "tabSent": "已发送"
