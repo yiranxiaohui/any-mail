@@ -152,7 +152,10 @@
     "sending": "Sending...",
     "sent": "Email sent",
     "sendFailed": "Failed to send",
-    "required": "From, To, and Subject are required"
+    "required": "From, To, and Subject are required",
+    "saveDraft": "Save draft",
+    "draftSaved": "Draft saved",
+    "autoSaved": "Auto-saved at {{time}}"
   },
   "accounts": {
     "title": "Accounts",

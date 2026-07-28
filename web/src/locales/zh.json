@@ -152,7 +152,10 @@
     "sending": "发送中...",
     "sent": "邮件已发送",
     "sendFailed": "发送失败",
-    "required": "发件人、收件人和主题为必填项"
+    "required": "发件人、收件人和主题为必填项",
+    "saveDraft": "暂存",
+    "draftSaved": "草稿已暂存",
+    "autoSaved": "已自动保存 {{time}}"
   },
   "accounts": {
     "title": "账户",
