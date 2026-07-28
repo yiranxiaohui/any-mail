@@ -15,7 +15,7 @@ const ALL_ACCOUNTS = "all";
 
 export default function Inbox() {
   const { t } = useTranslation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [emails, setEmails] = useState<Email[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [filterAccount, setFilterAccount] = useState(searchParams.get("account_id") || "all");
@@ -23,6 +23,17 @@ export default function Inbox() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+
+  const box = searchParams.get("box") === "sent" ? "sent" : "inbox";
+  const switchBox = (b: "inbox" | "sent") => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (b === "sent") next.set("box", "sent");
+      else next.delete("box");
+      return next;
+    });
+    setPage(1);
+  };
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -34,7 +45,8 @@ export default function Inbox() {
     try {
       const params: Record<string, string | number> = { limit: ps, offset: (p - 1) * ps };
       if (filterAccount !== "all") params.account_id = filterAccount;
-      if (filterProvider) params.provider = filterProvider;
+      if (box === "sent") params.box = "sent";
+      else if (filterProvider) params.provider = filterProvider;
       if (searchQuery) params.q = searchQuery;
       const data = await getEmails(params as Record<string, string>);
       setEmails(data.emails);
@@ -50,7 +62,7 @@ export default function Inbox() {
 
   useEffect(() => {
     fetchEmails(page, pageSize);
-  }, [filterAccount, filterProvider, page, pageSize]);
+  }, [filterAccount, filterProvider, box, page, pageSize]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -121,19 +133,31 @@ export default function Inbox() {
         </Button>
       </div>
 
+      {/* Box tabs */}
+      <div className="flex gap-1 shrink-0">
+        <Button variant={box === "inbox" ? "secondary" : "ghost"} size="sm" onClick={() => switchBox("inbox")}>
+          {t("inbox.tabInbox")}
+        </Button>
+        <Button variant={box === "sent" ? "secondary" : "ghost"} size="sm" onClick={() => switchBox("sent")}>
+          {t("inbox.tabSent")}
+        </Button>
+      </div>
+
       {/* Filters */}
       <div className="flex flex-wrap gap-3 shrink-0">
-        <select
-          value={filterProvider}
-          onChange={(e) => { setFilterProvider(e.target.value); setPage(1); }}
-          className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
-        >
-          <option value="">{t("accounts.allTypes")}</option>
-          <option value="domain">{t("accounts.typeDomain")}</option>
-          <option value="gmail">Gmail</option>
-          <option value="outlook">Outlook</option>
-          <option value="resend">Resend</option>
-        </select>
+        {box === "inbox" && (
+          <select
+            value={filterProvider}
+            onChange={(e) => { setFilterProvider(e.target.value); setPage(1); }}
+            className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          >
+            <option value="">{t("accounts.allTypes")}</option>
+            <option value="domain">{t("accounts.typeDomain")}</option>
+            <option value="gmail">Gmail</option>
+            <option value="outlook">Outlook</option>
+            <option value="resend">Resend</option>
+          </select>
+        )}
         <Combobox.Root
           items={accountItems}
           value={filterAccount}
