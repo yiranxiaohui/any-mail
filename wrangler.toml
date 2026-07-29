@@ -1,6 +1,13 @@
 name = "any-mail"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
+workers_dev = true
+
+# mail.xyprohani.xyz 绑在 Pages（纯静态，非 GET 一律 405）；
+# 这条 route 让同域名的 /api/* 优先进 Worker，外部客户端可直接用该域名调 API
+routes = [
+  { pattern = "mail.xyprohani.xyz/api/*", zone_name = "xyprohani.xyz" }
+]
 
 [observability]
 enabled = true
