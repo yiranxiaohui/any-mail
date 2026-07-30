@@ -52,7 +52,8 @@ function validateSubset(parent: KeyLimits, child: KeyLimits): string | null {
     return "address must contain parent key address (narrowing only)";
   }
   if (parent.expires_at !== null) {
-    if (!child.expires_at || new Date(child.expires_at).getTime() > new Date(parent.expires_at).getTime()) {
+    const childMs = child.expires_at ? new Date(child.expires_at).getTime() : NaN;
+    if (!child.expires_at || Number.isNaN(childMs) || childMs > new Date(parent.expires_at).getTime()) {
       return "expires_at is required and must not be later than parent key expires_at";
     }
   }
@@ -101,6 +102,9 @@ keys.post("/", async (c) => {
 
   const address = body.address?.trim() || null;
   const expiresAt = body.expires_at ?? null;
+  if (expiresAt !== null && Number.isNaN(new Date(expiresAt).getTime())) {
+    return c.json({ error: "invalid expires_at" }, 400);
+  }
 
   if (apiKey) {
     const err = validateSubset(
@@ -202,6 +206,9 @@ keys.patch("/:id", async (c) => {
     values.push(body.address?.trim() || null);
   }
   if (body.expires_at !== undefined) {
+    if (body.expires_at !== null && Number.isNaN(new Date(body.expires_at).getTime())) {
+      return c.json({ error: "invalid expires_at" }, 400);
+    }
     fields.push("expires_at = ?");
     values.push(body.expires_at);
   }
