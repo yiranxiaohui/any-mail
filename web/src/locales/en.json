@@ -483,8 +483,12 @@
       "accounts_read": "Read accounts",
       "accounts_write": "Manage accounts",
       "domains_read": "Read available domains",
+      "keys_create": "Create child keys",
       "all": "All permissions"
-    }
+    },
+    "keysCreateHint": "Allows this key to create and manage child keys via the API. Child key privileges can only narrow, never expand.",
+    "createdByKey": "Created by {{prefix}}…",
+    "createdByDeletedKey": "Created by a deleted key"
   },
   "language": {
     "label": "Language",

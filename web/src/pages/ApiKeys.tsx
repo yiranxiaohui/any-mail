@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getApiKeys, createApiKey, updateApiKey, deleteApiKey, rotateApiKey, type ApiKey } from "@/lib/api";
 
-const ALL_SCOPES = ["emails:read", "emails:send", "emails:delete", "accounts:read", "accounts:write", "domains:read"] as const;
+const ALL_SCOPES = ["emails:read", "emails:send", "emails:delete", "accounts:read", "accounts:write", "domains:read", "keys:create"] as const;
 
 // i18next uses ':' as namespace separator, so scope keys are stored with '_' in JSON.
 const scopeLabelKey = (scope: string) => `apiKeys.scopeLabels.${scope === "*" ? "all" : scope.replace(":", "_")}`;
@@ -197,6 +197,9 @@ export default function ApiKeys() {
                   </button>
                 ))}
               </div>
+              {scopes.includes("keys:create") && (
+                <p className="text-xs text-muted-foreground">{t("apiKeys.keysCreateHint")}</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium">{t("apiKeys.provider")}</label>
@@ -308,6 +311,13 @@ export default function ApiKeys() {
                       {key.address && (
                         <span className="text-xs rounded-full bg-muted px-2 py-0.5 text-muted-foreground font-mono">
                           → {key.address}
+                        </span>
+                      )}
+                      {key.created_by_key_id && (
+                        <span className="text-xs rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+                          {key.created_by_prefix
+                            ? t("apiKeys.createdByKey", { prefix: key.created_by_prefix })
+                            : t("apiKeys.createdByDeletedKey")}
                         </span>
                       )}
                     </div>

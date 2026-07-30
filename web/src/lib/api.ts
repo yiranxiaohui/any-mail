@@ -361,6 +361,8 @@ export interface ApiKey {
   expires_at: string | null;
   last_used_at: string | null;
   created_at: string;
+  created_by_key_id: string | null;   // non-null = created by another API key (delegation)
+  created_by_prefix: string | null;   // parent key's prefix for display; null if parent deleted
 }
 
 export function getApiKeys() {

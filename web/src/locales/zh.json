@@ -483,8 +483,12 @@
       "accounts_read": "读取账号",
       "accounts_write": "管理账号",
       "domains_read": "读取可用域名",
+      "keys_create": "创建子 key",
       "all": "全部权限"
-    }
+    },
+    "keysCreateHint": "允许该 key 通过 API 创建并管理子 key。子 key 权限只能收窄,不能放大。",
+    "createdByKey": "由 {{prefix}}… 创建",
+    "createdByDeletedKey": "由已删除的 key 创建"
   },
   "language": {
     "label": "语言",
