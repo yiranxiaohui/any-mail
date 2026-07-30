@@ -41,6 +41,7 @@ API keys rejected at route level return `403`:
 | `accounts:read` | List / get accounts |
 | `accounts:write` | Create / import / edit / reauth / sync / delete accounts |
 | `domains:read` | `GET /api/domains` (list the key's owning user's claimed domains) |
+| `keys:create` | Create / read / update / delete API keys (delegation mode) |
 | `*` | All of the above |
 
 ### Provider restriction
@@ -1017,7 +1018,18 @@ Claim a domain into the current user's `user_domains`, optionally auto-enabling 
 
 ### API Keys
 
-> All `/api/keys` endpoints are **JWT-only** — API keys cannot manage keys (prevents self-escalation).
+> `/api/keys` endpoints accept **JWT** (full access to all of the user's keys) or an **API key that explicitly carries the `keys:create` scope**. Note `*` does NOT imply `keys:create` — the scope must be listed explicitly.
+>
+> **Key-mode restrictions (delegation):**
+> - Visibility is limited to keys the calling key created (`created_by_key_id` = caller). Operating on any other id returns 404.
+> - A key can never read/modify/rotate/delete itself.
+> - Created/edited child keys must be a **subset** of the parent key (privileges only narrow):
+>   - every child scope must appear in the parent's scopes (or parent has `*`);
+>   - if the parent has a `provider`, the child's must equal it;
+>   - if the parent has an `address`, the child's must be non-empty and contain the parent's as a substring;
+>   - if the parent has an `expires_at`, the child must set one no later than it.
+>   Violations return 400 with the failed rule.
+> - `DELETE /api/keys/:id` cascades: all descendant keys (children, grandchildren, …) are deleted recursively. This applies in JWT mode too.
 
 #### `GET /api/keys`
 
@@ -1035,12 +1047,16 @@ List all API keys. Plaintext values and hashes are never returned.
       "scopes": "emails:read,accounts:write",
       "provider": "domain",
       "expires_at": null,
+      "created_by_key_id": null,
+      "created_by_prefix": null,
       "last_used_at": "2026-04-18T10:00:00.000Z",
       "created_at": "2026-04-10T08:00:00.000Z"
     }
   ]
 }
 ```
+
+When non-null, `created_by_key_id` indicates the key was created by another API key (delegation). `created_by_prefix` is the parent key's prefix; if the parent has been deleted, `created_by_prefix` is `null`.
 
 #### `POST /api/keys`
 
@@ -1075,7 +1091,8 @@ Create a new API key. The plaintext value is returned **only once** in this resp
     "key_prefix": "ak_AbCdEfGh",
     "scopes": ["emails:read", "accounts:write"],
     "provider": "domain",
-    "expires_at": null
+    "expires_at": null,
+    "created_by_key_id": null
   },
   "plaintext": "ak_AbCdEfGh1234567890abcdef..."
 }
@@ -1215,9 +1232,9 @@ Manually trigger email sync for all Gmail and Outlook accounts.
 | POST | `/api/user-domains/check-mx` | Yes | Check a domain's MX records (JWT only) |
 | POST | `/api/user-domains/import` | Yes | Claim a domain, optionally auto-enabling Email Routing (JWT only) |
 | POST | `/api/user-domains/sync` | Yes | Sync domains from Cloudflare into own user_domains (admin only) |
-| GET | `/api/keys` | Yes | List API keys (JWT only) |
-| POST | `/api/keys` | Yes | Create API key (JWT only) |
-| PATCH | `/api/keys/:id` | Yes | Update API key (JWT only) |
-| DELETE | `/api/keys/:id` | Yes | Revoke API key (JWT only) |
+| GET | `/api/keys` | Yes | List API keys (JWT or key with keys:create) |
+| POST | `/api/keys` | Yes | Create API key (JWT or key with keys:create) |
+| PATCH | `/api/keys/:id` | Yes | Update API key (JWT or key with keys:create) |
+| DELETE | `/api/keys/:id` | Yes | Revoke API key; cascades to descendants (JWT or key with keys:create) |
 | GET | `/api/domains` | Yes | List current user's claimed domains (scope: `domains:read`) |
 | POST | `/api/sync` | Yes | Trigger email sync for all accounts (JWT only) |
