@@ -10,6 +10,7 @@ export type Scope =
   | "accounts:read"
   | "accounts:write"
   | "domains:read"
+  | "keys:create"
   | "*";
 
 export interface ApiKeyContext {
@@ -18,6 +19,7 @@ export interface ApiKeyContext {
   scopes: string[];
   provider: string | null;
   address: string | null;
+  expires_at: string | null;
 }
 
 export interface UserContext {
@@ -243,6 +245,7 @@ async function lookupApiKey(db: D1Database, plaintext: string): Promise<ApiKeyCo
     scopes: row.scopes.split(",").map((s) => s.trim()).filter(Boolean),
     provider: row.provider,
     address: row.address,
+    expires_at: row.expires_at,
   };
 }
 
