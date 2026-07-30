@@ -1076,7 +1076,7 @@ Create a new API key. The plaintext value is returned **only once** in this resp
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | Yes | Human-readable label |
-| `scopes` | Yes | Non-empty array. Valid: `emails:read`, `emails:send`, `emails:delete`, `accounts:read`, `accounts:write`, `*` |
+| `scopes` | Yes | Non-empty array. Valid: `emails:read`, `emails:send`, `emails:delete`, `accounts:read`, `accounts:write`, `domains:read`, `keys:create`, `*` |
 | `provider` | No | `domain` \| `gmail` \| `outlook` \| `null`. `null` = no provider restriction |
 | `expires_at` | No | ISO datetime or `null` for never |
 
