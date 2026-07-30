@@ -1029,6 +1029,7 @@ Claim a domain into the current user's `user_domains`, optionally auto-enabling 
 >   - if the parent has an `address`, the child's must be non-empty and contain the parent's as a substring;
 >   - if the parent has an `expires_at`, the child must set one no later than it.
 >   Violations return 400 with the failed rule.
+> - Subset rules are enforced at child create/edit time only; later changes to the parent do not retroactively re-validate existing children — revoke the parent (which cascades) instead.
 > - `DELETE /api/keys/:id` cascades: all descendant keys (children, grandchildren, …) are deleted recursively. This applies in JWT mode too.
 
 #### `GET /api/keys`
