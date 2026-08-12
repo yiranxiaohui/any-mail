@@ -412,5 +412,8 @@ export function addUserDomain(name: string) {
   });
 }
 export function deleteUserDomain(name: string) {
-  return request<{ ok: boolean }>(`/api/user-domains/${encodeURIComponent(name)}`, { method: "DELETE" });
+  return request<{ ok: boolean; deleted_accounts: number; deleted_emails: number }>(
+    `/api/user-domains/${encodeURIComponent(name)}`,
+    { method: "DELETE" }
+  );
 }

@@ -851,18 +851,12 @@ Claim a domain name for the current user (no MX check — just a name reservatio
 
 #### `DELETE /api/user-domains/:name`
 
-Release a domain claimed by the current user. Fails if the user still has `provider=domain` accounts on it (delete those first).
+Release a domain claimed by the current user. Any `provider=domain` accounts under the domain and all messages belonging to those accounts are deleted in the same operation.
 
 **Response:**
 
 ```json
-{ "ok": true }
-```
-
-**Response (409)**:
-
-```json
-{ "error": "3 mailbox(es) still use this domain — delete them first" }
+{ "ok": true, "deleted_accounts": 3, "deleted_emails": 42 }
 ```
 
 #### `GET /api/user-domains/guide`

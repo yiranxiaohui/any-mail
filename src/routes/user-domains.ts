@@ -263,23 +263,59 @@ userDomains.post("/", async (c) => {
   return c.json({ ok: true, name }, 201);
 });
 
-/** 取消声明 */
+/** 取消声明，并删除该域名下的邮箱账号及邮件 */
 userDomains.delete("/:name", async (c) => {
   const userId = getUserId(c);
   const name = decodeURIComponent(c.req.param("name") ?? "").trim().toLowerCase();
   if (!name) return c.json({ error: "name required" }, 400);
 
-  // 拒绝带账号的域名删除（让用户先清理）
-  const inUse = await c.env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM accounts WHERE user_id = ? AND provider = 'domain' AND email LIKE ?"
-  ).bind(userId, `%@${name}`).first<{ n: number }>();
-  if ((inUse?.n ?? 0) > 0) {
-    return c.json({ error: `${inUse?.n} mailbox(es) still use this domain — delete them first` }, 409);
-  }
+  const mailboxSuffix = `%@${name}`;
+  const results = await c.env.DB.batch([
+    c.env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM accounts
+       WHERE user_id = ? AND provider = 'domain' AND email LIKE ?
+         AND EXISTS (
+           SELECT 1 FROM user_domains WHERE user_id = ? AND domain_name = ?
+         )`
+    ).bind(userId, mailboxSuffix, userId, name),
+    c.env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM emails
+       WHERE user_id = ?
+         AND account_id IN (
+           SELECT id FROM accounts
+           WHERE user_id = ? AND provider = 'domain' AND email LIKE ?
+             AND EXISTS (
+               SELECT 1 FROM user_domains WHERE user_id = ? AND domain_name = ?
+             )
+         )`
+    ).bind(userId, userId, mailboxSuffix, userId, name),
+    c.env.DB.prepare(
+      `DELETE FROM emails
+       WHERE user_id = ?
+         AND account_id IN (
+           SELECT id FROM accounts
+           WHERE user_id = ? AND provider = 'domain' AND email LIKE ?
+             AND EXISTS (
+               SELECT 1 FROM user_domains WHERE user_id = ? AND domain_name = ?
+             )
+         )`
+    ).bind(userId, userId, mailboxSuffix, userId, name),
+    c.env.DB.prepare(
+      `DELETE FROM accounts
+       WHERE user_id = ? AND provider = 'domain' AND email LIKE ?
+         AND EXISTS (
+           SELECT 1 FROM user_domains WHERE user_id = ? AND domain_name = ?
+         )`
+    ).bind(userId, mailboxSuffix, userId, name),
+    c.env.DB.prepare("DELETE FROM user_domains WHERE user_id = ? AND domain_name = ?")
+      .bind(userId, name),
+  ]);
 
-  await c.env.DB.prepare("DELETE FROM user_domains WHERE user_id = ? AND domain_name = ?")
-    .bind(userId, name).run();
-  return c.json({ ok: true });
+  return c.json({
+    ok: true,
+    deleted_accounts: (results[0]?.results[0] as { n: number } | undefined)?.n ?? 0,
+    deleted_emails: (results[1]?.results[0] as { n: number } | undefined)?.n ?? 0,
+  });
 });
 
 export default userDomains;

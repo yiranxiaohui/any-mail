@@ -69,8 +69,12 @@ export default function Domains() {
   const handleDelete = async (name: string) => {
     if (!confirm(t("domains.deleteConfirm", { name }))) return;
     try {
-      await deleteUserDomain(name);
-      toast.success(t("domains.deleted", { name }));
+      const result = await deleteUserDomain(name);
+      toast.success(
+        result.deleted_accounts > 0
+          ? t("domains.deletedWithAccounts", { name, count: result.deleted_accounts })
+          : t("domains.deleted", { name })
+      );
       await refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("domains.deleteFailed"));
