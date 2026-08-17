@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
     "db:migrate:local": "for f in migrations/*.sql; do echo \"-- $f --\"; wrangler d1 execute any-mail-db --local --file=\"$f\" || exit 1; done",
     "db:migrate:remote": "for f in migrations/*.sql; do echo \"-- $f --\"; wrangler d1 execute any-mail-db --remote --file=\"$f\" || exit 1; done"
   },

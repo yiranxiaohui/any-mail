@@ -210,7 +210,13 @@ Send an email via Resend.
   "to": "recipient@example.com",
   "subject": "Hello",
   "text": "Plain text body",
-  "html": "<p>HTML body</p>"
+  "html": "<p>HTML body</p>",
+  "attachments": [
+    {
+      "filename": "report.pdf",
+      "content": "JVBERi0xLjQK..."
+    }
+  ]
 }
 ```
 
@@ -221,6 +227,9 @@ Send an email via Resend.
 | `subject` | Yes | Email subject |
 | `text` | No | Plain text body |
 | `html` | No | HTML body |
+| `attachments` | No | Up to 20 attachments as `{ filename, content }`; `content` must be raw Base64 without a data URL prefix |
+
+The combined Base64-encoded attachment content cannot exceed 40 MB. Unsupported file types are rejected by Resend.
 
 **Response (200):**
 
@@ -238,6 +247,12 @@ Send an email via Resend.
 
 ```json
 { "error": "Resend API key not configured. Set it in Settings." }
+```
+
+**Response (413):**
+
+```json
+{ "error": "attachments exceed the 40 MB Base64-encoded size limit" }
 ```
 
 **Response (500):**

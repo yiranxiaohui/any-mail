@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../types";
 import { requireScope, getUserId, type ApiKeyContext, type UserContext } from "../auth";
 import { getResendApiKey } from "../settings";
+import { validateAttachments } from "../email-attachments";
 
 const emails = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext; user?: UserContext } }>();
 
@@ -179,10 +180,16 @@ emails.post("/send", requireScope("emails:send"), async (c) => {
     subject: string;
     text?: string;
     html?: string;
+    attachments?: unknown;
   }>();
 
   if (!body.from || !body.to || !body.subject) {
     return c.json({ error: "from, to, subject are required" }, 400);
+  }
+
+  const attachmentResult = validateAttachments(body.attachments);
+  if (!attachmentResult.ok) {
+    return c.json({ error: attachmentResult.error }, attachmentResult.status);
   }
 
   const apiKey = await getResendApiKey(c.env, userId);
@@ -202,6 +209,7 @@ emails.post("/send", requireScope("emails:send"), async (c) => {
       subject: body.subject,
       text: body.text || undefined,
       html: body.html || undefined,
+      attachments: attachmentResult.attachments.length ? attachmentResult.attachments : undefined,
     }),
   });
 
