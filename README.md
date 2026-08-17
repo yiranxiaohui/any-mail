@@ -9,6 +9,7 @@
 - Outlook 批量导入（`账号----密码----client_id----refresh_token`）与 ROPC / PKCE 重授权
 - Cloudflare 域名一键同步为可用邮箱域
 - 收件箱搜索、按账号 / provider 筛选，邮件详情 Text / HTML 切换
+- 通过 Resend 发送邮件，支持选择和发送多个附件
 - 双模认证：管理员 JWT（后台）+ 带 scope 的 API key（外部程序接码）
 - 接码专用轮询接口 `GET /api/emails/latest`，服务端正则提取验证码
 - OAuth 凭据可在网页 Settings 中配置

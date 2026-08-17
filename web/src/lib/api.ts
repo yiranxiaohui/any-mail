@@ -132,8 +132,22 @@ export function deleteEmail(id: string) {
   return request<{ ok: boolean }>(`/api/emails/${id}`, { method: "DELETE" });
 }
 
+export interface SendEmailAttachment {
+  filename: string;
+  content: string;
+}
+
+export interface SendEmailRequest {
+  from: string;
+  to: string;
+  subject: string;
+  text?: string;
+  html?: string;
+  attachments?: SendEmailAttachment[];
+}
+
 // Send email
-export function sendEmail(data: { from: string; to: string; subject: string; text?: string; html?: string }) {
+export function sendEmail(data: SendEmailRequest) {
   return request<{ ok: boolean; id: string }>("/api/emails/send", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

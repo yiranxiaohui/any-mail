@@ -8,6 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { loadDraft, saveDraft, clearDraft } from "@/lib/composeDraft";
+import {
+  AttachmentReadError,
+  MAX_ATTACHMENT_BASE64_BYTES,
+  MAX_ATTACHMENT_COUNT,
+  fileToBase64,
+  formatFileSize,
+  getTotalBase64EncodedSize,
+} from "@/lib/emailAttachments";
 
 export default function Compose() {
   const { t } = useTranslation();
@@ -24,8 +32,10 @@ export default function Compose() {
     searchParams.get("subject") || initialDraft?.subject || ""
   );
   const [body, setBody] = useState(initialDraft?.body || "");
+  const [attachments, setAttachments] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(initialDraft?.savedAt || null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const skipFirstSave = useRef(true);
   useEffect(() => {
@@ -48,6 +58,30 @@ export default function Compose() {
     }
   };
 
+  const handleSelectAttachments = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+    if (!selectedFiles.length) return;
+
+    const nextAttachments = [...attachments, ...selectedFiles];
+    if (nextAttachments.length > MAX_ATTACHMENT_COUNT) {
+      toast.error(t("compose.tooManyAttachments", { count: MAX_ATTACHMENT_COUNT }));
+      return;
+    }
+
+    const encodedSize = getTotalBase64EncodedSize(nextAttachments);
+    if (encodedSize > MAX_ATTACHMENT_BASE64_BYTES) {
+      toast.error(t("compose.attachmentsTooLarge", { size: formatFileSize(encodedSize) }));
+      return;
+    }
+
+    setAttachments(nextAttachments);
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  };
+
   const handleSend = async () => {
     if (!from || !to || !subject) {
       toast.error(t("compose.required"));
@@ -55,12 +89,27 @@ export default function Compose() {
     }
     setSending(true);
     try {
-      await sendEmail({ from, to, subject, text: body });
+      const encodedAttachments = await Promise.all(
+        attachments.map(async (file) => ({
+          filename: file.name,
+          content: await fileToBase64(file),
+        }))
+      );
+      await sendEmail({
+        from,
+        to,
+        subject,
+        text: body,
+        attachments: encodedAttachments.length ? encodedAttachments : undefined,
+      });
       clearDraft();
       toast.success(t("compose.sent"));
       navigate("/console?box=sent");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("compose.sendFailed"));
+      const message = err instanceof Error ? err.message : "";
+      toast.error(err instanceof AttachmentReadError
+        ? t("compose.attachmentReadFailed")
+        : message || t("compose.sendFailed"));
     } finally {
       setSending(false);
     }
@@ -117,6 +166,70 @@ export default function Compose() {
               value={body}
               onChange={(e) => setBody(e.target.value)}
             />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-sm font-medium">{t("compose.attachments")}</label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={sending}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                </svg>
+                {t("compose.addAttachment")}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleSelectAttachments}
+                disabled={sending}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t("compose.attachmentsHint", { count: MAX_ATTACHMENT_COUNT })}
+            </p>
+            {attachments.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-input p-2">
+                {attachments.map((file, index) => (
+                  <div
+                    key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
+                    className="flex items-center gap-2 rounded-md bg-muted/50 px-2.5 py-2"
+                  >
+                    <svg className="h-4 w-4 shrink-0 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                      <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                    <span className="min-w-0 flex-1 truncate text-sm" title={file.name}>{file.name}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(file.size)}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => removeAttachment(index)}
+                      disabled={sending}
+                      aria-label={t("compose.removeAttachment", { name: file.name })}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 6 6 18" />
+                        <path d="m6 6 12 12" />
+                      </svg>
+                    </Button>
+                  </div>
+                ))}
+                <p className="px-1 text-right text-xs text-muted-foreground">
+                  {t("compose.attachmentSummary", {
+                    count: attachments.length,
+                    size: formatFileSize(attachments.reduce((total, file) => total + file.size, 0)),
+                  })}
+                </p>
+              </div>
+            )}
           </div>
           <div className="flex items-center justify-end gap-3">
             {savedAt && (
