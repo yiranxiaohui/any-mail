@@ -3,6 +3,7 @@
     "name": "AnyMail"
   },
   "nav": {
+    "workspace": "邮件工作台",
     "inbox": "收件箱",
     "compose": "写邮件",
     "accounts": "账户",
@@ -445,6 +446,11 @@
     "title": "API 密钥",
     "description": "用于外部程序调用（接码等场景）。创建后密钥仅显示一次，请妥善保存。",
     "create": "创建密钥",
+    "keysCount": "共 {{count}} 把密钥",
+    "statsActive": "有效密钥",
+    "statsUsed": "已使用",
+    "statsExpiring": "30 天内到期",
+    "active": "有效",
     "name": "名称",
     "namePlaceholder": "例如：接码脚本",
     "scopes": "权限 (scopes)",

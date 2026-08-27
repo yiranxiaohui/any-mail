@@ -3,6 +3,7 @@
     "name": "AnyMail"
   },
   "nav": {
+    "workspace": "Mail workspace",
     "inbox": "Inbox",
     "compose": "Compose",
     "accounts": "Accounts",
@@ -445,6 +446,11 @@
     "title": "API Keys",
     "description": "For external program access (e.g. code reception). Keys are shown only once at creation — save them securely.",
     "create": "Create Key",
+    "keysCount": "{{count}} key(s)",
+    "statsActive": "Active keys",
+    "statsUsed": "Used at least once",
+    "statsExpiring": "Expiring in 30 days",
+    "active": "Active",
     "name": "Name",
     "namePlaceholder": "e.g. code-reception-script",
     "scopes": "Scopes",

@@ -6,10 +6,23 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Toaster } from "@/components/ui/sonner";
+import {
+  Folder,
+  Globe2,
+  Inbox as InboxIcon,
+  KeyRound,
+  Languages,
+  LogOut,
+  Mail,
+  Menu,
+  Send,
+  Settings2,
+  Users,
+} from "lucide-react";
 
 export default function Layout() {
   const { t, i18n } = useTranslation();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -29,74 +42,74 @@ export default function Layout() {
 
   const sidebar = (
     <>
-      <div className="px-5 py-5">
-        <div className="flex items-center gap-2">
-          <div className="size-8 rounded-lg bg-primary flex items-center justify-center">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect width="20" height="16" x="2" y="4" rx="2" />
-              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-            </svg>
+      <div className="px-5 pb-5 pt-6">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+            <Mail className="size-5" strokeWidth={2.2} />
           </div>
-          <span className="text-lg font-bold tracking-tight">AnyMail</span>
+          <div className="min-w-0">
+            <span className="block truncate text-[15px] font-bold tracking-tight">AnyMail</span>
+            <span className="block text-xs text-muted-foreground">{t("nav.workspace")}</span>
+          </div>
         </div>
       </div>
       <Separator />
-      <div className="flex flex-col gap-1 p-3 flex-1">
+      <div className="flex flex-1 flex-col gap-1 p-3">
         <SidebarLink to="/console" end onNavigate={closeDrawer}>
-          <IconInbox />
+          <InboxIcon />
           {t("nav.inbox")}
         </SidebarLink>
         <SidebarLink to="/console/compose" onNavigate={closeDrawer}>
-          <IconCompose />
+          <Send />
           {t("nav.compose")}
         </SidebarLink>
         <SidebarLink to="/console/accounts" onNavigate={closeDrawer}>
-          <IconAccounts />
+          <Users />
           {t("nav.accounts")}
         </SidebarLink>
         <SidebarLink to="/console/groups" onNavigate={closeDrawer}>
-          <IconGroups />
+          <Folder />
           {t("nav.groups")}
         </SidebarLink>
         <SidebarLink to="/console/domains" onNavigate={closeDrawer}>
-          <IconGlobe />
+          <Globe2 />
           {t("nav.domains")}
         </SidebarLink>
         <SidebarLink to="/console/api-keys" onNavigate={closeDrawer}>
-          <IconKey />
+          <KeyRound />
           {t("nav.apiKeys")}
         </SidebarLink>
         <SidebarLink to="/console/settings" onNavigate={closeDrawer}>
-          <IconSettings />
+          <Settings2 />
           {t("nav.settings")}
         </SidebarLink>
       </div>
       <Separator />
-      <div className="p-3 space-y-1">
+      <div className="space-y-2 p-3">
+        {user?.email && (
+          <div className="flex min-w-0 items-center gap-2.5 rounded-lg bg-muted/70 px-2.5 py-2">
+            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+              {user.email.slice(0, 1).toUpperCase()}
+            </div>
+            <span className="truncate text-xs font-medium text-foreground/80">{user.email}</span>
+          </div>
+        )}
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start gap-2.5 text-muted-foreground"
+          className="w-full justify-start gap-2.5 text-muted-foreground hover:text-foreground"
           onClick={toggleLang}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M2 12h20" />
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-          </svg>
+          <Languages className="size-4" />
           {i18n.language === "zh" ? "English" : "中文"}
         </Button>
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start gap-2.5 text-muted-foreground"
+          className="w-full justify-start gap-2.5 text-muted-foreground hover:text-foreground"
           onClick={handleLogout}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" x2="9" y1="12" y2="12" />
-          </svg>
+          <LogOut className="size-4" />
           {t("nav.logout")}
         </Button>
       </div>
@@ -104,9 +117,9 @@ export default function Layout() {
   );
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex min-h-screen bg-background">
       {/* Desktop sidebar */}
-      <nav className="hidden md:flex w-56 border-r bg-card flex-col shrink-0">
+      <nav className="hidden w-64 shrink-0 flex-col border-r bg-sidebar md:flex">
         {sidebar}
       </nav>
 
@@ -114,13 +127,13 @@ export default function Layout() {
       {drawerOpen && (
         <button
           aria-label="Close menu"
-          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          className="fixed inset-0 z-40 bg-foreground/25 backdrop-blur-[2px] md:hidden"
           onClick={closeDrawer}
         />
       )}
       <nav
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 max-w-[80vw] border-r bg-card flex flex-col md:hidden transition-transform duration-200 ease-out",
+          "fixed inset-y-0 left-0 z-50 flex w-64 max-w-[85vw] flex-col border-r bg-sidebar shadow-xl transition-transform duration-200 ease-out md:hidden",
           drawerOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -129,23 +142,24 @@ export default function Layout() {
 
       <div className="flex flex-1 flex-col min-w-0">
         {/* Mobile top bar */}
-        <header className="flex md:hidden items-center gap-2 border-b bg-card px-2 h-12 shrink-0">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-card px-3 md:hidden">
           <Button
             variant="ghost"
             size="icon"
             aria-label="Open menu"
             onClick={() => setDrawerOpen(true)}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="4" x2="20" y1="6" y2="6" />
-              <line x1="4" x2="20" y1="12" y2="12" />
-              <line x1="4" x2="20" y1="18" y2="18" />
-            </svg>
+            <Menu className="size-5" />
           </Button>
-          <span className="text-base font-bold tracking-tight">AnyMail</span>
+          <div className="flex items-center gap-2">
+            <div className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <Mail className="size-3.5" />
+            </div>
+            <span className="text-base font-bold tracking-tight">AnyMail</span>
+          </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 min-w-0">
+        <main className="app-scrollbar min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
       </div>
@@ -172,80 +186,14 @@ function SidebarLink({
       onClick={onNavigate}
       className={({ isActive }) =>
         cn(
-          "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+          "flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all",
           isActive
-            ? "bg-accent text-accent-foreground"
-            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            ? "bg-primary text-primary-foreground shadow-sm"
+            : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         )
       }
     >
       {children}
     </NavLink>
-  );
-}
-
-function IconCompose() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m22 2-7 20-4-9-9-4z" />
-      <path d="m22 2-11 11" />
-    </svg>
-  );
-}
-
-function IconInbox() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
-    </svg>
-  );
-}
-
-function IconAccounts() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  );
-}
-
-function IconGroups() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
-    </svg>
-  );
-}
-
-function IconGlobe() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <path d="M2 12h20" />
-      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-    </svg>
-  );
-}
-
-function IconKey() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="7.5" cy="15.5" r="5.5" />
-      <path d="m21 2-9.6 9.6" />
-      <path d="m15.5 7.5 3 3L22 7l-3-3" />
-    </svg>
-  );
-}
-
-function IconSettings() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
   );
 }
