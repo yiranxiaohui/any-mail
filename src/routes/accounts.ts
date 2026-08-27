@@ -454,6 +454,53 @@ accounts.post("/bulk-tag", requireScope("accounts:write"), async (c) => {
   return c.json({ ok: true, updated: res.meta?.changes ?? 0 });
 });
 
+/** 批量删除账号及其所有邮件 */
+accounts.post("/bulk-delete", requireScope("accounts:write"), async (c) => {
+  const userId = getUserId(c);
+  const body = await c.req.json<{ ids: unknown }>();
+  if (!Array.isArray(body.ids) || body.ids.length === 0) {
+    return c.json({ error: "ids required" }, 400);
+  }
+  if (body.ids.length > 500) {
+    return c.json({ error: "too many ids (maximum 500)" }, 400);
+  }
+  if (body.ids.some((id) => typeof id !== "string" || !id.trim())) {
+    return c.json({ error: "ids must be non-empty strings" }, 400);
+  }
+
+  const ids = Array.from(new Set((body.ids as string[]).map((id) => id.trim())));
+  const keyProvider = c.get("apiKey")?.provider ?? null;
+  const statements: D1PreparedStatement[] = [];
+
+  // Keep each statement comfortably below D1's bound-parameter limit.
+  for (let offset = 0; offset < ids.length; offset += 50) {
+    const chunk = ids.slice(offset, offset + 50);
+    const placeholders = chunk.map(() => "?").join(",");
+    const providerSql = keyProvider ? " AND provider = ?" : "";
+    const accountValues = keyProvider
+      ? [userId, ...chunk, keyProvider]
+      : [userId, ...chunk];
+
+    statements.push(
+      c.env.DB.prepare(
+        `DELETE FROM emails WHERE user_id = ? AND account_id IN (
+          SELECT id FROM accounts WHERE user_id = ? AND id IN (${placeholders})${providerSql}
+        )`
+      ).bind(userId, ...accountValues),
+      c.env.DB.prepare(
+        `DELETE FROM accounts WHERE user_id = ? AND id IN (${placeholders})${providerSql} RETURNING id`
+      ).bind(...accountValues),
+    );
+  }
+
+  const results = await c.env.DB.batch(statements);
+  const deleted = results.reduce(
+    (sum, result, index) => index % 2 === 1 ? sum + result.results.length : sum,
+    0,
+  );
+  return c.json({ ok: true, deleted });
+});
+
 /** 删除账号及其所有邮件 */
 accounts.delete("/:id", requireScope("accounts:write"), async (c) => {
   const userId = getUserId(c);

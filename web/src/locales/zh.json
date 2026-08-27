@@ -229,7 +229,7 @@
       "bulkMoved": "已将 {{count}} 个账户移动到「{{tag}}」",
       "bulkCleared": "已清除 {{count}} 个账户的标签",
       "bulkActions": "批量操作",
-      "selectAllHint": "勾选要分组或移动的账户",
+      "selectAllHint": "勾选要批量操作的账户",
       "selected": "已选 {{count}} 个",
       "deselect": "取消",
       "searchPlaceholder": "搜索分组...",
@@ -247,6 +247,11 @@
     "remove": "移除",
     "removeConfirm": "确定删除账户 {{email}} 及其所有邮件？",
     "removed": "已移除 {{email}}",
+    "bulkRemove": "批量删除",
+    "bulkRemoving": "删除中...",
+    "bulkRemoveConfirm": "确定删除选中的 {{count}} 个账户及其所有邮件？此操作无法撤销。",
+    "bulkRemoved": "已删除 {{count}} 个账户",
+    "bulkRemoveFailed": "批量删除失败",
     "dialog": {
       "title": "添加账户",
       "description": "选择账户类型进行创建或导入"
