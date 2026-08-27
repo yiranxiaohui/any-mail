@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getAccounts, getAccount, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, getDomains, getAccountTags, bulkTagAccounts, createTagGroup, getGmailAuthUrl, getOutlookAuthUrl, type Account } from "@/lib/api";
+import { getAccounts, getAccount, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, getDomains, getAccountTags, bulkTagAccounts, bulkDeleteAccounts, createTagGroup, getGmailAuthUrl, getOutlookAuthUrl, type Account } from "@/lib/api";
 import { Link, useSearchParams } from "react-router-dom";
+import { Loader2, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,6 +68,7 @@ export default function Accounts() {
   // Tags
   const [tagStats, setTagStats] = useState<{ tag: string | null; count: number }[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deletingSelected, setDeletingSelected] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupAfterCreate, setNewGroupAfterCreate] = useState<"none" | "bulkMove" | "rowMove">("none");
@@ -275,6 +277,29 @@ export default function Accounts() {
       fetchTags();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("settings.saveFailed"));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0 || deletingSelected) return;
+    const count = selectedIds.size;
+    if (!confirm(t("accounts.bulkRemoveConfirm", { count }))) return;
+
+    setDeletingSelected(true);
+    try {
+      const res = await bulkDeleteAccounts(Array.from(selectedIds));
+      setSelectedIds(new Set());
+      toast.success(t("accounts.bulkRemoved", { count: res.deleted }));
+
+      const nextTotal = Math.max(0, total - res.deleted);
+      const nextPage = Math.min(page, Math.max(1, Math.ceil(nextTotal / pageSize)));
+      if (nextPage !== page) setPage(nextPage);
+      else fetchAccounts();
+      fetchTags();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("accounts.bulkRemoveFailed"));
+    } finally {
+      setDeletingSelected(false);
     }
   };
 
@@ -759,11 +784,12 @@ export default function Accounts() {
         )}
         {selectedIds.size > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-6 py-2">
-            <span className="text-sm font-medium">
+            <span className="hidden text-sm font-medium sm:inline">
               {t("accounts.tags.bulkActions")}
             </span>
             <select
               value=""
+              disabled={deletingSelected}
               onChange={(e) => {
                 const v = e.target.value;
                 if (v === "__new__") openNewGroupDialog("bulkMove");
@@ -780,8 +806,24 @@ export default function Accounts() {
               <option value="__new__">{t("accounts.tags.newGroupOption")}</option>
               <option value="__clear__">{t("accounts.tags.removeTag")}</option>
             </select>
-            <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
-              {t("accounts.tags.deselect")}
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={deletingSelected}
+              onClick={handleBulkDelete}
+            >
+              {deletingSelected ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {deletingSelected ? t("accounts.bulkRemoving") : t("accounts.bulkRemove")}
+            </Button>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              disabled={deletingSelected}
+              onClick={() => setSelectedIds(new Set())}
+              title={t("accounts.tags.deselect")}
+              aria-label={t("accounts.tags.deselect")}
+            >
+              <X className="h-4 w-4" />
             </Button>
           </div>
         )}
@@ -806,7 +848,7 @@ export default function Accounts() {
         ) : (
           <div className="divide-y">
             {accounts.map((account) => (
-              <div key={account.id} className="flex items-center justify-between gap-2 px-4 py-4 sm:px-6">
+              <div key={account.id} className="flex flex-col items-stretch gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:px-6">
                 <div className="flex min-w-0 items-center gap-3">
                   <input
                     type="checkbox"
@@ -845,7 +887,7 @@ export default function Accounts() {
                     </span>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex flex-wrap items-center justify-end gap-1 sm:shrink-0 sm:flex-nowrap">
                   <select
                     value=""
                     onChange={(e) => {

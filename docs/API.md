@@ -412,6 +412,32 @@ If the API key is bound to a provider, only accounts of that provider are affect
 { "error": "ids required" }
 ```
 
+#### `POST /api/accounts/bulk-delete`
+
+Delete multiple accounts and all emails belonging to them in one operation.
+
+**Required scope:** `accounts:write`
+
+**Request Body:**
+
+```json
+{ "ids": ["uuid1", "uuid2", "uuid3"] }
+```
+
+`ids` must contain between 1 and 500 non-empty account IDs. Duplicate IDs are ignored. Accounts owned by another user are never affected; when an API key is bound to a provider, accounts from other providers are also skipped.
+
+**Response (200):**
+
+```json
+{ "ok": true, "deleted": 3 }
+```
+
+**Response (400):**
+
+```json
+{ "error": "ids required" }
+```
+
 #### `GET /api/accounts/:id`
 
 Get a single account. Includes sensitive fields (`password`, `client_id`, `refresh_token`) used by the Accounts page for edit/reauth operations.
@@ -1220,6 +1246,7 @@ Manually trigger email sync for all Gmail and Outlook accounts.
 | POST | `/api/accounts/tags` | Yes | Create empty tag group (scope: `accounts:write`) |
 | DELETE | `/api/accounts/tags/:name` | Yes | Delete tag group, clear on accounts (scope: `accounts:write`) |
 | POST | `/api/accounts/bulk-tag` | Yes | Bulk set/clear tag on accounts (scope: `accounts:write`) |
+| POST | `/api/accounts/bulk-delete` | Yes | Bulk delete accounts + emails (scope: `accounts:write`) |
 | GET | `/api/accounts/:id` | Yes | Get account detail (scope: `accounts:read`) |
 | POST | `/api/accounts` | Yes | Create domain email (scope: `accounts:write`, provider=domain) |
 | POST | `/api/accounts/import` | Yes | Bulk import Outlook accounts (scope: `accounts:write`, provider=outlook) |

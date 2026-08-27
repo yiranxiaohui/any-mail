@@ -204,6 +204,14 @@ export function bulkTagAccounts(ids: string[], tag: string | null) {
   });
 }
 
+export function bulkDeleteAccounts(ids: string[]) {
+  return request<{ ok: boolean; deleted: number }>("/api/accounts/bulk-delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
+}
+
 export function getAccount(id: string) {
   return request<Account & { client_id?: string | null; refresh_token?: string | null }>(`/api/accounts/${id}`);
 }

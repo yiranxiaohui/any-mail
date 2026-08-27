@@ -229,7 +229,7 @@
       "bulkMoved": "Moved {{count}} account(s) to \"{{tag}}\"",
       "bulkCleared": "Cleared tag from {{count}} account(s)",
       "bulkActions": "Bulk actions",
-      "selectAllHint": "Select accounts to group or move",
+      "selectAllHint": "Select accounts for bulk actions",
       "selected": "{{count}} selected",
       "deselect": "Cancel",
       "searchPlaceholder": "Search groups...",
@@ -247,6 +247,11 @@
     "remove": "Remove",
     "removeConfirm": "Delete account {{email}} and all its emails?",
     "removed": "Removed {{email}}",
+    "bulkRemove": "Delete selected",
+    "bulkRemoving": "Deleting...",
+    "bulkRemoveConfirm": "Delete the {{count}} selected account(s) and all their emails? This cannot be undone.",
+    "bulkRemoved": "Deleted {{count}} account(s)",
+    "bulkRemoveFailed": "Failed to delete selected accounts",
     "dialog": {
       "title": "Add Account",
       "description": "Choose account type to create or import"
