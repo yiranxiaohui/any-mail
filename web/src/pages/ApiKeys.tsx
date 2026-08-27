@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getApiKeys, createApiKey, updateApiKey, deleteApiKey, rotateApiKey, type ApiKey } from "@/lib/api";
+import { Activity, Check, Clock3, Copy, KeyRound, Pencil, Plus, RotateCw, ShieldCheck, Trash2 } from "lucide-react";
 
 const ALL_SCOPES = ["emails:read", "emails:send", "emails:delete", "accounts:read", "accounts:write", "domains:read", "keys:create"] as const;
 
@@ -145,21 +146,37 @@ export default function ApiKeys() {
   };
 
   const isEdit = mode?.kind === "edit";
+  const now = Date.now();
+  const activeCount = keys.filter((key) => !key.expires_at || new Date(key.expires_at).getTime() > now).length;
+  const usedCount = keys.filter((key) => !!key.last_used_at).length;
+  const expiringCount = keys.filter((key) => {
+    if (!key.expires_at) return false;
+    const expiresAtMs = new Date(key.expires_at).getTime();
+    return expiresAtMs > now && expiresAtMs < now + 30 * 24 * 60 * 60 * 1000;
+  }).length;
 
   return (
-    <div className="flex flex-col gap-6 md:h-[calc(100vh-48px)]">
-      <div className="flex items-center justify-between shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t("apiKeys.title")}</h1>
-          <p className="text-sm text-muted-foreground">{t("apiKeys.description")}</p>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
+            <KeyRound className="size-5" strokeWidth={2.1} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-[28px]">{t("apiKeys.title")}</h1>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">{t("apiKeys.description")}</p>
+          </div>
         </div>
-        <Button onClick={openCreate}>
-          <svg className="mr-1.5 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" x2="12" y1="5" y2="19" />
-            <line x1="5" x2="19" y1="12" y2="12" />
-          </svg>
+        <Button onClick={openCreate} className="self-start shadow-sm">
+          <Plus className="size-4" />
           {t("apiKeys.create")}
         </Button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <SummaryCard icon={<ShieldCheck className="size-4" />} label={t("apiKeys.statsActive")} value={activeCount} tone="green" />
+        <SummaryCard icon={<Activity className="size-4" />} label={t("apiKeys.statsUsed")} value={usedCount} tone="blue" />
+        <SummaryCard icon={<Clock3 className="size-4" />} label={t("apiKeys.statsExpiring")} value={expiringCount} tone="amber" />
       </div>
 
       <Dialog open={!!mode} onOpenChange={(open) => { if (!open) closeDialog(); }}>
@@ -170,9 +187,9 @@ export default function ApiKeys() {
               {isEdit ? t("apiKeys.editDescription") : t("apiKeys.description")}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 pt-2">
+          <div className="space-y-5 pt-2">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">{t("apiKeys.name")}</label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("apiKeys.name")}</label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -180,19 +197,20 @@ export default function ApiKeys() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">{t("apiKeys.scopes")}</label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("apiKeys.scopes")}</label>
               <div className="flex flex-wrap gap-2">
                 {ALL_SCOPES.map((s) => (
                   <button
                     key={s}
                     type="button"
                     onClick={() => toggleScope(s)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                       scopes.includes(s)
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-background text-muted-foreground border-input hover:bg-accent"
+                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                        : "border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                     }`}
                   >
+                    {scopes.includes(s) && <Check className="size-3.5" />}
                     {t(scopeLabelKey(s))}
                   </button>
                 ))}
@@ -202,11 +220,11 @@ export default function ApiKeys() {
               )}
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">{t("apiKeys.provider")}</label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("apiKeys.provider")}</label>
               <select
                 value={provider}
                 onChange={(e) => setProvider(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring/50"
               >
                 <option value="">{t("apiKeys.providerAll")}</option>
                 <option value="domain">{t("apiKeys.providerDomain")}</option>
@@ -215,7 +233,7 @@ export default function ApiKeys() {
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">{t("apiKeys.address")}</label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("apiKeys.address")}</label>
               <Input
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
@@ -224,7 +242,7 @@ export default function ApiKeys() {
               <p className="text-xs text-muted-foreground">{t("apiKeys.addressHint")}</p>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">{t("apiKeys.expiresAt")}</label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("apiKeys.expiresAt")}</label>
               <Input
                 type="datetime-local"
                 value={expiresAt}
@@ -251,14 +269,15 @@ export default function ApiKeys() {
             <DialogDescription>{plaintext?.name}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 pt-2">
-            <div className="rounded-md border border-amber-300/50 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm text-amber-900 dark:text-amber-200">
+            <div className="rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm leading-6 text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200">
               {t("apiKeys.plaintextWarning")}
             </div>
             <div className="flex gap-2">
-              <code className="flex-1 rounded-md border bg-muted px-3 py-2 text-xs font-mono break-all">
+              <code className="min-w-0 flex-1 rounded-lg border bg-muted px-3 py-2.5 text-xs font-mono leading-5 break-all">
                 {plaintext?.key}
               </code>
-              <Button variant="outline" onClick={() => plaintext && copyToClipboard(plaintext.key)}>
+              <Button variant="outline" onClick={() => plaintext && copyToClipboard(plaintext.key)} aria-label={t("apiKeys.copy")} title={t("apiKeys.copy")}>
+                <Copy className="size-4" />
                 {t("apiKeys.copy")}
               </Button>
             </div>
@@ -269,101 +288,90 @@ export default function ApiKeys() {
         </DialogContent>
       </Dialog>
 
-      <Card className="flex flex-col md:min-h-0 md:flex-1">
-        <CardHeader className="shrink-0">
-          <CardTitle className="text-base">{t("apiKeys.title")}</CardTitle>
-          <CardDescription>
-            {keys.length} {keys.length === 1 ? "key" : "keys"}
-          </CardDescription>
+      <Card className="min-h-0 flex-1">
+        <CardHeader className="shrink-0 gap-3 px-5 sm:px-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">{t("apiKeys.title")}</CardTitle>
+              <CardDescription className="mt-1">{t("apiKeys.keysCount", { count: keys.length })}</CardDescription>
+            </div>
+            <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <KeyRound className="size-4" />
+            </div>
+          </div>
         </CardHeader>
         <Separator />
         {loading ? (
-          <CardContent className="flex items-center justify-center py-12 text-muted-foreground">
+          <CardContent className="flex items-center justify-center py-16 text-muted-foreground">
             <svg className="mr-2 h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 12a9 9 0 1 1-6.219-8.56" />
             </svg>
             {t("inbox.loading")}
           </CardContent>
         ) : keys.length === 0 ? (
-          <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-            <svg className="mb-3 h-10 w-10 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-            </svg>
-            <p className="text-sm font-medium">{t("apiKeys.empty")}</p>
-            <p className="text-xs mt-1">{t("apiKeys.emptyHint")}</p>
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+            <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-muted">
+              <KeyRound className="size-6 opacity-50" />
+            </div>
+            <p className="text-sm font-medium text-foreground">{t("apiKeys.empty")}</p>
+            <p className="mt-1 max-w-xs text-xs leading-5">{t("apiKeys.emptyHint")}</p>
           </CardContent>
         ) : (
-          <div className="divide-y md:overflow-y-auto md:flex-1 md:min-h-0">
+          <div className="app-scrollbar divide-y md:min-h-0 md:flex-1 md:overflow-y-auto">
             {keys.map((key) => {
               const scopesList = key.scopes.split(",").filter(Boolean);
-              const isExpired = key.expires_at && new Date(key.expires_at) < new Date();
+              const isExpired = Boolean(key.expires_at && new Date(key.expires_at).getTime() <= now);
               return (
-                <div key={key.id} className="flex items-start justify-between px-6 py-4 gap-4">
-                  <div className="flex-1 min-w-0 space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium">{key.name}</span>
-                      <code className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                        {key.key_prefix}…
-                      </code>
-                      <span className="text-xs rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
-                        {providerLabel(key.provider)}
-                      </span>
-                      {key.address && (
-                        <span className="text-xs rounded-full bg-muted px-2 py-0.5 text-muted-foreground font-mono">
-                          → {key.address}
-                        </span>
-                      )}
-                      {key.created_by_key_id && (
-                        <span className="text-xs rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
-                          {key.created_by_prefix
-                            ? t("apiKeys.createdByKey", { prefix: key.created_by_prefix })
-                            : t("apiKeys.createdByDeletedKey")}
-                        </span>
-                      )}
+                <div key={key.id} className="group flex flex-col gap-4 px-4 py-5 transition-colors hover:bg-muted/35 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <KeyRound className="size-4" />
                     </div>
-                    <div className="flex flex-wrap gap-1">
-                      {scopesList.map((s) => (
-                        <span key={s} className="text-xs rounded-md bg-accent px-1.5 py-0.5 text-accent-foreground">
-                          {t(scopeLabelKey(s), { defaultValue: s })}
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-sm font-semibold text-foreground">{key.name}</span>
+                        <code className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          {key.key_prefix}…
+                        </code>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${isExpired ? "bg-destructive/10 text-destructive" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"}`}>
+                          <span className={`size-1.5 rounded-full ${isExpired ? "bg-destructive" : "bg-emerald-500"}`} />
+                          {isExpired ? t("apiKeys.expired") : t("apiKeys.active")}
                         </span>
-                      ))}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {t("apiKeys.createdAt", { date: new Date(key.created_at).toLocaleString() })}
-                      {" · "}
-                      {key.last_used_at
-                        ? t("apiKeys.lastUsed", { date: new Date(key.last_used_at).toLocaleString() })
-                        : t("apiKeys.neverUsed")}
-                      {" · "}
-                      {!key.expires_at
-                        ? t("apiKeys.never")
-                        : isExpired
-                          ? t("apiKeys.expired")
-                          : t("apiKeys.expires", { date: new Date(key.expires_at).toLocaleString() })}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="rounded-md bg-muted px-2 py-1">{providerLabel(key.provider)}</span>
+                        {key.address && <span className="max-w-full truncate rounded-md bg-muted px-2 py-1 font-mono">→ {key.address}</span>}
+                        {key.created_by_key_id && (
+                          <span className="rounded-md bg-muted px-2 py-1">
+                            {key.created_by_prefix ? t("apiKeys.createdByKey", { prefix: key.created_by_prefix }) : t("apiKeys.createdByDeletedKey")}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {scopesList.map((s) => (
+                          <span key={s} className="rounded-md border border-primary/15 bg-primary/5 px-2 py-1 text-[11px] font-medium text-accent-foreground">
+                            {t(scopeLabelKey(s), { defaultValue: s })}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-x-2 text-xs leading-5 text-muted-foreground">
+                        <span>{t("apiKeys.createdAt", { date: new Date(key.created_at).toLocaleString() })}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{key.last_used_at ? t("apiKeys.lastUsed", { date: new Date(key.last_used_at).toLocaleString() }) : t("apiKeys.neverUsed")}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{!key.expires_at ? t("apiKeys.never") : isExpired ? t("apiKeys.expired") : t("apiKeys.expires", { date: new Date(key.expires_at).toLocaleString() })}</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEdit(key)}
-                    >
-                      {t("apiKeys.edit")}
+                  <div className="flex shrink-0 items-center gap-1 self-end sm:self-center">
+                    <Button variant="ghost" size="icon-sm" onClick={() => openEdit(key)} aria-label={t("apiKeys.edit")} title={t("apiKeys.edit")}>
+                      <Pencil className="size-3.5" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRotate(key)}
-                    >
-                      {t("apiKeys.rotate")}
+                    <Button variant="ghost" size="icon-sm" onClick={() => handleRotate(key)} aria-label={t("apiKeys.rotate")} title={t("apiKeys.rotate")}>
+                      <RotateCw className="size-3.5" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => handleRevoke(key)}
-                    >
-                      {t("apiKeys.revoke")}
+                    <Button variant="ghost" size="icon-sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleRevoke(key)} aria-label={t("apiKeys.revoke")} title={t("apiKeys.revoke")}>
+                      <Trash2 className="size-3.5" />
                     </Button>
                   </div>
                 </div>
@@ -372,6 +380,36 @@ export default function ApiKeys() {
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+function SummaryCard({
+  icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  tone: "green" | "blue" | "amber";
+}) {
+  const toneClasses = {
+    green: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    blue: "bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    amber: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  };
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3.5 shadow-sm">
+      <div className={`flex size-9 items-center justify-center rounded-lg ${toneClasses[tone]}`}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-xl font-semibold tracking-tight">{value}</p>
+        <p className="truncate text-xs text-muted-foreground">{label}</p>
+      </div>
     </div>
   );
 }
