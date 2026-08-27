@@ -117,7 +117,7 @@ export default function Layout() {
   );
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-dvh min-h-screen min-w-0 overflow-hidden bg-background">
       {/* Desktop sidebar */}
       <nav className="hidden w-64 shrink-0 flex-col border-r bg-sidebar md:flex">
         {sidebar}
@@ -140,7 +140,7 @@ export default function Layout() {
         {sidebar}
       </nav>
 
-      <div className="flex flex-1 flex-col min-w-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Mobile top bar */}
         <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-card px-3 md:hidden">
           <Button
@@ -159,7 +159,7 @@ export default function Layout() {
           </div>
         </header>
 
-        <main className="app-scrollbar min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="app-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
       </div>
