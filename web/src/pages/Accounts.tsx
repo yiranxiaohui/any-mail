@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { getAccounts, getAccount, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, getDomains, getAccountTags, bulkTagAccounts, bulkDeleteAccounts, createTagGroup, getGmailAuthUrl, getOutlookAuthUrl, type Account } from "@/lib/api";
 import { Link, useSearchParams } from "react-router-dom";
@@ -1035,7 +1036,44 @@ function GroupFilter({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number; listMaxHeight: number } | null>(null);
+
+  // The popover is portaled to <body> with fixed positioning so ancestor
+  // `overflow-hidden` containers (e.g. Card) cannot clip it. Its list height is
+  // capped to the available viewport space, flipping upward when needed.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const trigger = containerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const margin = 8;
+      const gap = 4;
+      const chrome = 48; // search input + padding above the list
+      const preferred = 256;
+      const below = window.innerHeight - rect.bottom - gap - margin;
+      const above = rect.top - gap - margin;
+      const width = Math.min(288, window.innerWidth - 2 * margin);
+      const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
+      const openUp = below < preferred + chrome && above > below;
+      const space = openUp ? above : below;
+      const listMaxHeight = Math.max(96, Math.min(preferred, space - chrome));
+      setPos(
+        openUp
+          ? { left, bottom: window.innerHeight - rect.top + gap, listMaxHeight }
+          : { left, top: rect.bottom + gap, listMaxHeight },
+      );
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -1043,7 +1081,9 @@ function GroupFilter({
       return;
     }
     const onDown = (e: MouseEvent) => {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (containerRef.current?.contains(target) || popoverRef.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", onDown);
     // focus the input after the popover mounts
@@ -1087,8 +1127,12 @@ function GroupFilter({
           <path d="m6 9 6 6 6-6" />
         </svg>
       </button>
-      {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-md border bg-popover p-1 shadow-md">
+      {open && pos && createPortal(
+        <div
+          ref={popoverRef}
+          style={{ position: "fixed", left: pos.left, top: pos.top, bottom: pos.bottom }}
+          className="z-50 w-72 max-w-[calc(100vw-1rem)] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+        >
           <div className="px-1 pb-1">
             <input
               ref={inputRef}
@@ -1099,7 +1143,7 @@ function GroupFilter({
               className="w-full rounded border border-input bg-background px-2 py-1 text-sm outline-none focus:border-primary"
             />
           </div>
-          <div className="max-h-64 overflow-y-auto">
+          <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: pos.listMaxHeight }}>
             {!hasResults ? (
               <div className="px-2 py-4 text-center text-xs text-muted-foreground">{emptyText}</div>
             ) : (
@@ -1132,7 +1176,8 @@ function GroupFilter({
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
