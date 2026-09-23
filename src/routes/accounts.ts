@@ -423,25 +423,38 @@ accounts.post("/:id/reauth", requireScope("accounts:write"), async (c) => {
 /** 批量设置标签 */
 accounts.post("/bulk-tag", requireScope("accounts:write"), async (c) => {
   const userId = getUserId(c);
-  const body = await c.req.json<{ ids: string[]; tag: string | null }>();
+  const body = await c.req.json<{ ids: unknown; tag: string | null }>();
   if (!Array.isArray(body.ids) || body.ids.length === 0) {
     return c.json({ error: "ids required" }, 400);
+  }
+  if (body.ids.length > 500) {
+    return c.json({ error: "too many ids (maximum 500)" }, 400);
+  }
+  if (body.ids.some((id) => typeof id !== "string" || !id.trim())) {
+    return c.json({ error: "ids must be non-empty strings" }, 400);
   }
   const normalized = typeof body.tag === "string" ? body.tag.trim() : body.tag;
   const tag = normalized ? normalized : null;
 
-  const key = c.get("apiKey");
-  const keyProvider = key?.provider ?? null;
+  const ids = Array.from(new Set((body.ids as string[]).map((id) => id.trim())));
+  const keyProvider = c.get("apiKey")?.provider ?? null;
+  const statements: D1PreparedStatement[] = [];
 
-  const placeholders = body.ids.map(() => "?").join(",");
-  let sql = `UPDATE accounts SET tag = ?, updated_at = datetime('now') WHERE user_id = ? AND id IN (${placeholders})`;
-  const values: (string | null)[] = [tag, userId, ...body.ids];
-  if (keyProvider) {
-    sql += " AND provider = ?";
-    values.push(keyProvider);
+  // D1 allows at most 100 bound parameters per statement; chunk the ids.
+  for (let offset = 0; offset < ids.length; offset += 50) {
+    const chunk = ids.slice(offset, offset + 50);
+    const placeholders = chunk.map(() => "?").join(",");
+    let sql = `UPDATE accounts SET tag = ?, updated_at = datetime('now') WHERE user_id = ? AND id IN (${placeholders})`;
+    const values: (string | null)[] = [tag, userId, ...chunk];
+    if (keyProvider) {
+      sql += " AND provider = ?";
+      values.push(keyProvider);
+    }
+    statements.push(c.env.DB.prepare(sql).bind(...values));
   }
 
-  const res = await c.env.DB.prepare(sql).bind(...values).run();
+  const results = await c.env.DB.batch(statements);
+  const updated = results.reduce((sum, r) => sum + (r.meta?.changes ?? 0), 0);
 
   if (tag) {
     try {
@@ -451,7 +464,7 @@ accounts.post("/bulk-tag", requireScope("accounts:write"), async (c) => {
     }
   }
 
-  return c.json({ ok: true, updated: res.meta?.changes ?? 0 });
+  return c.json({ ok: true, updated });
 });
 
 /** 批量删除账号及其所有邮件 */
