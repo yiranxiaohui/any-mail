@@ -17,6 +17,7 @@ class FakeDatabase {
         record.params = params;
         return statement;
       },
+      run: async () => ({ success: true, results: [], meta: { changes: 0 } }),
     };
     return statement;
   }
@@ -98,6 +99,47 @@ describe("POST /bulk-delete", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids }),
+      }, env);
+      expect(response.status).toBe(400);
+    }
+
+    expect(db.statements).toHaveLength(0);
+  });
+});
+
+describe("POST /bulk-tag", () => {
+  test("chunks large ID lists so no statement exceeds D1's 100-parameter limit", async () => {
+    const db = new FakeDatabase();
+    const { app, env } = createApp(db, "outlook");
+    const ids = Array.from({ length: 120 }, (_, index) => `account-${index}`);
+
+    const response = await app.request("/bulk-tag", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [...ids, " account-0 "], tag: " group-a " }),
+    }, env);
+
+    expect(response.status).toBe(200);
+    const updates = db.statements.filter((s) => s.sql.startsWith("UPDATE accounts"));
+    expect(updates).toHaveLength(3);
+    for (const update of updates) {
+      expect(update.params.length).toBeLessThanOrEqual(100);
+      expect(update.sql).toContain("AND provider = ?");
+      expect(update.params.slice(0, 2)).toEqual(["group-a", "user-1"]);
+      expect(update.params.at(-1)).toBe("outlook");
+    }
+    expect(updates.flatMap((u) => u.params.slice(2, -1))).toEqual(ids);
+  });
+
+  test("rejects empty, invalid, and oversized ID lists", async () => {
+    const db = new FakeDatabase();
+    const { app, env } = createApp(db);
+
+    for (const ids of [[], [""], Array.from({ length: 501 }, (_, index) => `account-${index}`)]) {
+      const response = await app.request("/bulk-tag", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, tag: "group-a" }),
       }, env);
       expect(response.status).toBe(400);
     }
