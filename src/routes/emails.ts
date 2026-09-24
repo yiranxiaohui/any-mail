@@ -3,6 +3,7 @@ import type { Env } from "../types";
 import { requireScope, getUserId, type ApiKeyContext, type UserContext } from "../auth";
 import { getResendApiKey } from "../settings";
 import { validateAttachments } from "../email-attachments";
+import { syncAccountOnDemand } from "../sync";
 
 const emails = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext; user?: UserContext } }>();
 
@@ -105,6 +106,17 @@ emails.get("/latest", requireScope("emails:read"), async (c) => {
 
   const keyProvider = c.get("apiKey")?.provider ?? null;
   const keyAddress = c.get("apiKey")?.address ?? null;
+
+  // Gmail/Outlook mail arrives by polling; refresh the requested mailbox now so
+  // code-polling clients do not wait for its turn in the cron rotation.
+  const target = (to ?? keyAddress ?? "").trim();
+  if (target.includes("@")) {
+    try {
+      await syncAccountOnDemand(c.env, userId, target, keyProvider);
+    } catch {
+      // Serve whatever is stored; the failure is recorded on the account.
+    }
+  }
 
   let sql = "SELECT * FROM emails WHERE user_id = ?";
   const params: string[] = [userId];

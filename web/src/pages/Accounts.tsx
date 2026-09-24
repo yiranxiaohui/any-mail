@@ -49,6 +49,7 @@ export default function Accounts() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterProvider, setFilterProvider] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
   // "" = all, "__untagged__" = 未分组, 其它 = 具体 tag
   // 存在 URL（?tag=）里：跳转到收件箱等页面再返回时筛选不丢，Groups 页的「查看」链接也能直达
   const filterTag = searchParams.get("tag") ?? "";
@@ -89,22 +90,28 @@ export default function Accounts() {
   const [showPassword, setShowPassword] = useState(false);
   const [reauthing, setReauthing] = useState(false);
 
-  const fetchAccounts = async (s = debouncedSearch, prov = filterProvider, tag = filterTag, p = page, ps = pageSize) => {
-    setLoading(true);
+  const fetchAccounts = async (s = debouncedSearch, prov = filterProvider, tag = filterTag, p = page, ps = pageSize, quiet = false) => {
+    if (!quiet) setLoading(true);
     try {
       const data = await getAccounts({
         search: s || undefined,
         provider: prov || undefined,
         tag: tag || undefined,
+        status: filterStatus || undefined,
         limit: ps,
         offset: (p - 1) * ps,
       });
       setAccounts(data.accounts);
       setTotal(data.meta.total);
+    } catch (err) {
+      if (!quiet) throw err;
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   };
+
+  // Refresh sync-state badges without replacing the list with a spinner.
+  const reloadAccountsQuietly = () => fetchAccounts(debouncedSearch, filterProvider, filterTag, page, pageSize, true);
 
   const fetchTags = async () => {
     try {
@@ -141,7 +148,7 @@ export default function Accounts() {
   useEffect(() => {
     fetchAccounts(debouncedSearch, filterProvider, filterTag, page, pageSize);
     setSelectedIds(new Set());
-  }, [debouncedSearch, filterProvider, filterTag, page, pageSize]);
+  }, [debouncedSearch, filterProvider, filterStatus, filterTag, page, pageSize]);
 
   useEffect(() => {
     fetchTags();
@@ -365,6 +372,7 @@ export default function Accounts() {
       toast.error(err instanceof Error ? err.message : t("inbox.syncFailed"));
     } finally {
       setSyncingId(null);
+      void reloadAccountsQuietly();
     }
   };
 
@@ -617,6 +625,7 @@ export default function Accounts() {
                             // 刷新令牌
                             const detail = await getAccount(editAccount.id);
                             setEditRefreshToken(detail.refresh_token ?? "");
+                            void reloadAccountsQuietly();
                           } else {
                             toast.error(res.error || t("accounts.reauthFailed"));
                           }
@@ -719,6 +728,14 @@ export default function Accounts() {
                 <option value="domain">{t("accounts.typeDomain")}</option>
                 <option value="gmail">Gmail</option>
                 <option value="outlook">Outlook</option>
+              </select>
+              <select
+                value={filterStatus}
+                onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+                className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">{t("accounts.allStatuses")}</option>
+                <option value="needs_reauth">{t("accounts.needsReauth")}</option>
               </select>
               <Input
                 placeholder={t("accounts.searchPlaceholder")}
@@ -864,6 +881,21 @@ export default function Accounts() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-medium break-all">{account.email}</span>
                       <ProviderBadge provider={account.provider} />
+                      {account.needs_reauth ? (
+                        <span
+                          className="inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"
+                          title={account.sync_error ?? undefined}
+                        >
+                          {t("accounts.needsReauth")}
+                        </span>
+                      ) : account.sync_error ? (
+                        <span
+                          className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400"
+                          title={account.sync_error}
+                        >
+                          {t("accounts.syncError")}
+                        </span>
+                      ) : null}
                       {account.tag && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                           {account.tag}

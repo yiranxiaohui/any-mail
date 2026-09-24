@@ -1,5 +1,6 @@
 import type { Account } from "../types";
 import type { OAuthCredentials } from "../settings";
+import { ReauthRequiredError, isReauthErrorCode } from "../errors";
 
 const MS_AUTH_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
 const MS_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
@@ -101,7 +102,7 @@ export async function handleOutlookPkceCallback(
   await db.prepare(
     `INSERT INTO accounts (id, user_id, provider, email, client_id, access_token, refresh_token, token_expires_at)
      VALUES (?, ?, 'outlook', ?, ?, ?, ?, ?)
-     ON CONFLICT(email) DO UPDATE SET client_id=?, access_token=?, refresh_token=?, token_expires_at=?, updated_at=datetime('now')`
+     ON CONFLICT(email) DO UPDATE SET client_id=?, access_token=?, refresh_token=?, token_expires_at=?, needs_reauth=0, sync_error=NULL, last_sync_at=NULL, updated_at=datetime('now')`
   )
     .bind(
       id, userId, email, clientId,
@@ -173,7 +174,7 @@ export async function handleOutlookCallback(
   await db.prepare(
     `INSERT INTO accounts (id, user_id, provider, email, access_token, refresh_token, token_expires_at)
      VALUES (?, ?, 'outlook', ?, ?, ?, ?)
-     ON CONFLICT(email) DO UPDATE SET access_token=?, refresh_token=?, token_expires_at=?, updated_at=datetime('now')`
+     ON CONFLICT(email) DO UPDATE SET access_token=?, refresh_token=?, token_expires_at=?, needs_reauth=0, sync_error=NULL, last_sync_at=NULL, updated_at=datetime('now')`
   )
     .bind(
       id, userId, email,
@@ -234,9 +235,11 @@ async function refreshOutlookToken(account: Account, creds: OAuthCredentials, db
     body: new URLSearchParams(params),
   });
 
-  const tokenBody = await res.json() as { access_token?: string; refresh_token?: string; expires_in?: number; error?: string; error_description?: string };
+  const tokenBody = await res.json().catch(() => ({})) as { access_token?: string; refresh_token?: string; expires_in?: number; error?: string; error_description?: string };
   if (!tokenBody.access_token) {
-    throw new Error(tokenBody.error_description || tokenBody.error || "Failed to refresh token");
+    const message = tokenBody.error_description || tokenBody.error || `Failed to refresh token (HTTP ${res.status})`;
+    if (isReauthErrorCode(tokenBody.error)) throw new ReauthRequiredError(message);
+    throw new Error(message);
   }
 
   const expiresAt = Date.now() + (tokenBody.expires_in ?? 3600) * 1000;
@@ -261,40 +264,44 @@ async function refreshOutlookToken(account: Account, creds: OAuthCredentials, db
 /** 拉取 Outlook 新邮件 */
 export async function syncOutlookEmails(account: Account & { user_id: string }, creds: OAuthCredentials, db: D1Database): Promise<number> {
   const accessToken = await refreshOutlookToken(account, creds, db);
-  let synced = 0;
 
   const res = await fetch(
     `${GRAPH_API}/messages?$top=10&$orderby=receivedDateTime desc&$select=id,from,toRecipients,subject,body,bodyPreview,receivedDateTime,internetMessageHeaders`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
 
-  const data = (await res.json()) as { value?: OutlookMessage[] };
-  if (!data.value) return 0;
+  const data = (await res.json().catch(() => ({}))) as { value?: OutlookMessage[]; error?: { code?: string; message?: string } };
+  if (!res.ok) {
+    throw new Error(`Graph API ${res.status}: ${data.error?.message || data.error?.code || "request failed"}`);
+  }
+  const messages = data.value ?? [];
+  if (messages.length === 0) return 0;
 
-  for (const msg of data.value) {
-    const exists = await db.prepare(
-      "SELECT 1 FROM emails WHERE message_id = ? AND account_id = ?"
-    )
-      .bind(msg.id, account.id)
-      .first();
+  // One dedupe query + one batched insert keeps each account within a few D1 queries.
+  const ids = messages.map((m) => m.id);
+  const existing = await db.prepare(
+    `SELECT message_id FROM emails WHERE account_id = ? AND message_id IN (${ids.map(() => "?").join(",")})`
+  )
+    .bind(account.id, ...ids)
+    .all<{ message_id: string }>();
+  const seen = new Set(existing.results.map((r) => r.message_id));
 
-    if (exists) continue;
+  const inserts = messages
+    .filter((msg) => !seen.has(msg.id))
+    .map((msg) => {
+      const fromAddress = msg.from?.emailAddress
+        ? `${msg.from.emailAddress.name} <${msg.from.emailAddress.address}>`
+        : "";
+      const toAddress = (msg.toRecipients ?? [])
+        .map((r) => r.emailAddress?.address)
+        .filter(Boolean)
+        .join(", ") || account.email;
+      const isHtml = msg.body?.contentType === "html";
 
-    const fromAddress = msg.from?.emailAddress
-      ? `${msg.from.emailAddress.name} <${msg.from.emailAddress.address}>`
-      : "";
-    const toAddress = (msg.toRecipients ?? [])
-      .map((r) => r.emailAddress?.address)
-      .filter(Boolean)
-      .join(", ") || account.email;
-
-    const isHtml = msg.body?.contentType === "html";
-
-    await db.prepare(
-      `INSERT OR IGNORE INTO emails (id, user_id, account_id, message_id, provider, from_address, to_address, subject, text_body, html_body, raw_headers, received_at)
-       VALUES (?, ?, ?, ?, 'outlook', ?, ?, ?, ?, ?, '{}', datetime(?))`
-    )
-      .bind(
+      return db.prepare(
+        `INSERT OR IGNORE INTO emails (id, user_id, account_id, message_id, provider, from_address, to_address, subject, text_body, html_body, raw_headers, received_at)
+         VALUES (?, ?, ?, ?, 'outlook', ?, ?, ?, ?, ?, '{}', datetime(?))`
+      ).bind(
         crypto.randomUUID(),
         account.user_id,
         account.id,
@@ -305,13 +312,11 @@ export async function syncOutlookEmails(account: Account & { user_id: string }, 
         isHtml ? (msg.bodyPreview ?? "") : (msg.body?.content ?? ""),
         isHtml ? (msg.body?.content ?? "") : "",
         msg.receivedDateTime ?? new Date().toISOString()
-      )
-      .run();
+      );
+    });
 
-    synced++;
-  }
-
-  return synced;
+  if (inserts.length > 0) await db.batch(inserts);
+  return inserts.length;
 }
 
 interface OutlookMessage {
