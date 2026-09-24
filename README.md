@@ -5,7 +5,7 @@
 ## 功能特性
 
 - 域名邮箱实时接收（Cloudflare Email Worker）
-- Gmail / Outlook 邮箱自动同步（每分钟轮询）
+- Gmail / Outlook 邮箱自动同步（每分钟轮转轮询一批账号，默认 10 个，可用 `SYNC_BATCH_SIZE` 调整；`/api/emails/latest` 查询指定邮箱时会先即时同步；refresh token 失效的账号会标记为「需重新授权」并跳过）
 - Outlook 批量导入（`账号----密码----client_id----refresh_token`）与 ROPC / PKCE 重授权
 - Cloudflare 域名一键同步为可用邮箱域
 - 收件箱搜索、按账号 / provider 筛选，邮件详情 Text / HTML 切换

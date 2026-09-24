@@ -8,6 +8,7 @@ export interface Env {
   JWT_SECRET: string;           // JWT 签名密钥
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
+  SYNC_BATCH_SIZE?: string;     // OAuth accounts polled per cron run (default 10)
 }
 
 export interface Account {
@@ -23,6 +24,9 @@ export interface Account {
   last_sync_history_id: string | null;
   expires_at: string | null;
   tag?: string | null;
+  last_sync_at?: number | null;
+  sync_error?: string | null;
+  needs_reauth?: number;
   created_at: string;
   updated_at: string;
 }

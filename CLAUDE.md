@@ -42,7 +42,8 @@ bunx tsc -b
 
 ### Backend (`/src`) — Hono on Cloudflare Workers
 
-- **`index.ts`** — Entry point. Exports three handlers: `fetch` (HTTP via Hono), `email` (Cloudflare Email Worker), `scheduled` (Cron Trigger every 1 min: cleanup expired accounts, then poll Gmail/Outlook). Also inlines `GET /api/domains` and the sync endpoints.
+- **`index.ts`** — Entry point. Exports three handlers: `fetch` (HTTP via Hono), `email` (Cloudflare Email Worker), `scheduled` (Cron Trigger every 1 min: cleanup expired accounts, then `syncDueAccounts`). Also inlines `GET /api/domains` and the sync endpoints.
+- **`sync.ts`** — OAuth sync scheduling. Each cron run syncs the `SYNC_BATCH_SIZE` (default 10) least-recently-synced Gmail/Outlook accounts, because Workers Free caps each invocation at 50 subrequests / 50 D1 queries; rotating keeps every refresh token renewed (Microsoft refresh tokens die after 90 idle days). Records `last_sync_at` / `sync_error`; `invalid_grant`-style failures (`ReauthRequiredError`, `errors.ts`) set `needs_reauth = 1` and the cron skips the account until its credentials change. `GET /api/emails/latest?to=` syncs that mailbox on demand (≥15 s apart).
 - **`auth.ts`** — Dual-mode auth:
   - **JWT** (HMAC-SHA256 via Web Crypto) for admin session.
   - **API keys** (`ak_<base64url>` prefix, SHA-256 hashed in DB) for external clients.

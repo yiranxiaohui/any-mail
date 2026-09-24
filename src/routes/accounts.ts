@@ -10,13 +10,14 @@ accounts.get("/", requireScope("accounts:read"), async (c) => {
   const search = c.req.query("search");
   const providerQuery = c.req.query("provider");
   const tagQuery = c.req.query("tag");
+  const statusQuery = c.req.query("status");
   const limit = Math.min(parseInt(c.req.query("limit") ?? "20"), 100);
   const offset = parseInt(c.req.query("offset") ?? "0");
 
   const keyProvider = c.get("apiKey")?.provider ?? null;
   const provider = keyProvider ?? providerQuery;
 
-  let sql = "SELECT id, provider, email, expires_at, tag, created_at, updated_at FROM accounts WHERE user_id = ?";
+  let sql = "SELECT id, provider, email, expires_at, tag, needs_reauth, sync_error, last_sync_at, created_at, updated_at FROM accounts WHERE user_id = ?";
   let countSql = "SELECT COUNT(*) as total FROM accounts WHERE user_id = ?";
   const params: string[] = [userId];
   const countParams: string[] = [userId];
@@ -41,6 +42,9 @@ accounts.get("/", requireScope("accounts:read"), async (c) => {
       params.push(tagQuery);
       countParams.push(tagQuery);
     }
+  }
+  if (statusQuery === "needs_reauth") {
+    conditions.push("needs_reauth = 1");
   }
   if (conditions.length > 0) {
     const extra = " AND " + conditions.join(" AND ");
@@ -283,7 +287,8 @@ accounts.post("/import", requireScope("accounts:write"), async (c) => {
       await c.env.DB.prepare(
         `INSERT INTO accounts (id, user_id, provider, email, password, client_id, refresh_token, tag)
          VALUES (?, ?, 'outlook', ?, ?, ?, ?, ?)
-         ON CONFLICT(email) DO UPDATE SET password=?, client_id=?, refresh_token=?, tag=COALESCE(?, tag), updated_at=datetime('now')`
+         ON CONFLICT(email) DO UPDATE SET password=?, client_id=?, refresh_token=?, tag=COALESCE(?, tag),
+           access_token=NULL, token_expires_at=NULL, needs_reauth=0, sync_error=NULL, last_sync_at=NULL, updated_at=datetime('now')`
       ).bind(id, userId, lowered, password || null, clientId, refreshToken, tag, password || null, clientId, refreshToken, tag).run();
       results.push({ email, status: "ok" });
     } catch (err) {
@@ -356,6 +361,10 @@ accounts.patch("/:id", requireScope("accounts:write"), async (c) => {
   if (fields.length === 0) {
     return c.json({ error: "no fields to update" }, 400);
   }
+  if (body.refresh_token !== undefined || body.client_id !== undefined) {
+    // New credentials: drop the cached access token and give the account a fresh sync slot.
+    fields.push("access_token = NULL", "token_expires_at = NULL", "needs_reauth = 0", "sync_error = NULL", "last_sync_at = NULL");
+  }
 
   fields.push("updated_at = datetime('now')");
   values.push(id);
@@ -414,7 +423,7 @@ accounts.post("/:id/reauth", requireScope("accounts:write"), async (c) => {
   const expiresAt = Date.now() + (token.expires_in ?? 3600) * 1000;
 
   await c.env.DB.prepare(
-    "UPDATE accounts SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?"
+    "UPDATE accounts SET access_token = ?, refresh_token = ?, token_expires_at = ?, needs_reauth = 0, sync_error = NULL, last_sync_at = NULL, updated_at = datetime('now') WHERE id = ? AND user_id = ?"
   ).bind(token.access_token, token.refresh_token ?? "", expiresAt, id, userId).run();
 
   return c.json({ ok: true, email: account.email });

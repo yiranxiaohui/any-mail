@@ -3,9 +3,8 @@ import { cors } from "hono/cors";
 import type { Env, Account } from "./types";
 import { login, registerUser, authMiddleware, requireJwt, requireScope, getUserId, ensureRelayToken, type ApiKeyContext, type UserContext } from "./auth";
 import { handleDomainEmail } from "./providers/domain";
-import { syncGmailEmails } from "./providers/gmail";
-import { syncOutlookEmails } from "./providers/outlook";
 import { getOAuthCredentials } from "./settings";
+import { cronBatchSize, syncAccountWithState, syncDueAccounts } from "./sync";
 import emailsRoute from "./routes/emails";
 import accountsRoute from "./routes/accounts";
 import oauthRoute from "./routes/oauth";
@@ -97,46 +96,39 @@ app.post("/api/accounts/:id/sync", requireScope("accounts:write"), async (c) => 
   if (account.provider === "domain") return c.json({ error: "domain accounts receive email passively" }, 400);
 
   const creds = await getOAuthCredentials(c.env, userId);
-  try {
-    let synced = 0;
-    if (account.provider === "gmail") {
-      synced = await syncGmailEmails(account, creds, c.env.DB);
-    } else if (account.provider === "outlook") {
-      synced = await syncOutlookEmails(account, creds, c.env.DB);
-    }
-    return c.json({ ok: true, email: account.email, provider: account.provider, synced });
-  } catch (err) {
-    return c.json({ ok: false, email: account.email, provider: account.provider, synced: 0, error: err instanceof Error ? err.message : "unknown error" }, 500);
+  const result = await syncAccountWithState(c.env, account, creds);
+  if (result.error) {
+    return c.json({
+      ok: false,
+      email: account.email,
+      provider: account.provider,
+      synced: 0,
+      error: result.error,
+      needs_reauth: !!result.needsReauth,
+    }, 500);
   }
+  return c.json({ ok: true, email: account.email, provider: account.provider, synced: result.synced });
 });
 
-/** 同步单个用户的所有 Gmail/Outlook 账号 */
+/**
+ * 同步单个用户最久未同步的一批 Gmail/Outlook 账号（跳过需重新授权的账号）。
+ * 单次请求受 Workers 子请求/D1 查询上限约束，因此按批处理而不是一次同步全部。
+ */
 async function syncUserAccounts(env: Env, userId: string) {
   const creds = await getOAuthCredentials(env, userId);
   const now = new Date().toISOString();
   const accounts = await env.DB.prepare(
-    "SELECT * FROM accounts WHERE user_id = ? AND provider IN ('gmail', 'outlook') AND (expires_at IS NULL OR expires_at >= ?)"
-  ).bind(userId, now).all<Account>();
+    `SELECT * FROM accounts
+      WHERE user_id = ? AND provider IN ('gmail', 'outlook') AND needs_reauth = 0
+        AND (expires_at IS NULL OR expires_at >= ?)
+      ORDER BY last_sync_at IS NOT NULL, last_sync_at ASC
+      LIMIT ?`
+  ).bind(userId, now, cronBatchSize(env)).all<Account>();
 
   const results: { email: string; provider: string; synced: number; error?: string }[] = [];
-
   for (const account of accounts.results) {
-    try {
-      let synced = 0;
-      if (account.provider === "gmail") {
-        synced = await syncGmailEmails(account, creds, env.DB);
-      } else if (account.provider === "outlook") {
-        synced = await syncOutlookEmails(account, creds, env.DB);
-      }
-      results.push({ email: account.email, provider: account.provider, synced });
-    } catch (err) {
-      results.push({
-        email: account.email,
-        provider: account.provider,
-        synced: 0,
-        error: err instanceof Error ? err.message : "unknown error",
-      });
-    }
+    const result = await syncAccountWithState(env, account, creds);
+    results.push({ email: account.email, provider: account.provider, synced: result.synced, ...(result.error ? { error: result.error } : {}) });
   }
 
   return { ok: true, results };
@@ -160,37 +152,6 @@ async function cleanupExpiredAccounts(env: Env): Promise<number> {
   return res.meta?.changes ?? 0;
 }
 
-/** 定时任务：遍历所有用户，逐个同步他们的账号 */
-async function syncAllUsers(env: Env) {
-  // 一次性 join 出 (account, user_id)；按 user 分组迭代以每个用户用各自的 OAuth 凭证
-  // 跳过已过期账号（即将被 cleanup 删除）
-  const now = new Date().toISOString();
-  const accounts = await env.DB.prepare(
-    "SELECT * FROM accounts WHERE provider IN ('gmail', 'outlook') AND (expires_at IS NULL OR expires_at >= ?) ORDER BY user_id"
-  ).bind(now).all<Account>();
-
-  const byUser = new Map<string, Account[]>();
-  for (const a of accounts.results) {
-    if (!byUser.has(a.user_id)) byUser.set(a.user_id, []);
-    byUser.get(a.user_id)!.push(a);
-  }
-
-  for (const [userId, userAccounts] of byUser) {
-    const creds = await getOAuthCredentials(env, userId);
-    for (const account of userAccounts) {
-      try {
-        if (account.provider === "gmail") {
-          await syncGmailEmails(account, creds, env.DB);
-        } else if (account.provider === "outlook") {
-          await syncOutlookEmails(account, creds, env.DB);
-        }
-      } catch {
-        // 单个账号同步失败不影响其他
-      }
-    }
-  }
-}
-
 export default {
   fetch: app.fetch,
 
@@ -202,6 +163,6 @@ export default {
   // Cron Trigger: 清理过期账号 + 轮询 Gmail / Outlook
   async scheduled(_event: ScheduledEvent, env: Env) {
     await cleanupExpiredAccounts(env);
-    await syncAllUsers(env);
+    await syncDueAccounts(env);
   },
 };

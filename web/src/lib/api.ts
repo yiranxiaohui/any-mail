@@ -8,6 +8,9 @@ export interface Account {
   email: string;
   expires_at: string | null;
   tag: string | null;
+  needs_reauth?: number;
+  sync_error?: string | null;
+  last_sync_at?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -156,11 +159,12 @@ export function sendEmail(data: SendEmailRequest) {
 }
 
 // Accounts
-export function getAccounts(params?: { search?: string; provider?: string; tag?: string; limit?: number; offset?: number }) {
+export function getAccounts(params?: { search?: string; provider?: string; tag?: string; status?: string; limit?: number; offset?: number }) {
   const q = new URLSearchParams();
   if (params?.search) q.set("search", params.search);
   if (params?.provider) q.set("provider", params.provider);
   if (params?.tag !== undefined) q.set("tag", params.tag);
+  if (params?.status) q.set("status", params.status);
   if (params?.limit) q.set("limit", String(params.limit));
   if (params?.offset) q.set("offset", String(params.offset));
   const qs = q.toString();
