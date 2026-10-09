@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { fromDateTimeInput, parseUtcDate, toDateTimeInput } from "@/lib/dateTime";
+import { useDateTime } from "@/lib/timezone";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +20,7 @@ type DialogMode = { kind: "create" } | { kind: "edit"; id: string };
 
 export default function ApiKeys() {
   const { t } = useTranslation();
+  const { formatDateTime, timeZone } = useDateTime();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<DialogMode | null>(null);
@@ -65,7 +68,7 @@ export default function ApiKeys() {
     setScopes(key.scopes.split(",").filter(Boolean));
     setProvider(key.provider ?? "");
     setAddress(key.address ?? "");
-    setExpiresAt(key.expires_at ? key.expires_at.slice(0, 16) : "");
+    setExpiresAt(key.expires_at ? toDateTimeInput(key.expires_at, timeZone) : "");
     setMode({ kind: "edit", id: key.id });
   };
 
@@ -82,12 +85,13 @@ export default function ApiKeys() {
     if (!mode || !name.trim() || scopes.length === 0) return;
     setSaving(true);
     try {
+      const originalExpiry = mode.kind === "edit" ? keys.find((key) => key.id === mode.id)?.expires_at : null;
       const payload = {
         name: name.trim(),
         scopes,
         provider: provider || null,
         address: address.trim() || null,
-        expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
+        expires_at: expiresAt ? fromDateTimeInput(expiresAt, timeZone, originalExpiry ?? undefined) : null,
       };
       if (mode.kind === "create") {
         const res = await createApiKey(payload);
@@ -103,7 +107,7 @@ export default function ApiKeys() {
       fetchKeys();
     } catch (err) {
       const fallback = mode.kind === "create" ? t("apiKeys.createFailed") : t("apiKeys.updateFailed");
-      toast.error(err instanceof Error ? err.message : fallback);
+      toast.error(err instanceof RangeError ? t("settings.invalidDateTime") : err instanceof Error ? err.message : fallback);
     } finally {
       setSaving(false);
     }
@@ -147,11 +151,11 @@ export default function ApiKeys() {
 
   const isEdit = mode?.kind === "edit";
   const now = Date.now();
-  const activeCount = keys.filter((key) => !key.expires_at || new Date(key.expires_at).getTime() > now).length;
+  const activeCount = keys.filter((key) => !key.expires_at || parseUtcDate(key.expires_at).getTime() > now).length;
   const usedCount = keys.filter((key) => !!key.last_used_at).length;
   const expiringCount = keys.filter((key) => {
     if (!key.expires_at) return false;
-    const expiresAtMs = new Date(key.expires_at).getTime();
+    const expiresAtMs = parseUtcDate(key.expires_at).getTime();
     return expiresAtMs > now && expiresAtMs < now + 30 * 24 * 60 * 60 * 1000;
   }).length;
 
@@ -248,7 +252,7 @@ export default function ApiKeys() {
                 value={expiresAt}
                 onChange={(e) => setExpiresAt(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">{t("apiKeys.expiresHint")}</p>
+              <p className="text-xs text-muted-foreground">{t("apiKeys.expiresHint")} · {timeZone}</p>
             </div>
             <Button
               className="w-full"
@@ -320,7 +324,7 @@ export default function ApiKeys() {
           <div className="app-scrollbar divide-y md:min-h-0 md:flex-1 md:overflow-y-auto">
             {keys.map((key) => {
               const scopesList = key.scopes.split(",").filter(Boolean);
-              const isExpired = Boolean(key.expires_at && new Date(key.expires_at).getTime() <= now);
+              const isExpired = Boolean(key.expires_at && parseUtcDate(key.expires_at).getTime() <= now);
               return (
                 <div key={key.id} className="group flex flex-col gap-4 px-4 py-5 transition-colors hover:bg-muted/35 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                   <div className="flex min-w-0 items-start gap-3">
@@ -355,11 +359,11 @@ export default function ApiKeys() {
                         ))}
                       </div>
                       <div className="flex flex-wrap gap-x-2 text-xs leading-5 text-muted-foreground">
-                        <span>{t("apiKeys.createdAt", { date: new Date(key.created_at).toLocaleString() })}</span>
+                        <span>{t("apiKeys.createdAt", { date: formatDateTime(key.created_at) })}</span>
                         <span aria-hidden="true">·</span>
-                        <span>{key.last_used_at ? t("apiKeys.lastUsed", { date: new Date(key.last_used_at).toLocaleString() }) : t("apiKeys.neverUsed")}</span>
+                        <span>{key.last_used_at ? t("apiKeys.lastUsed", { date: formatDateTime(key.last_used_at) }) : t("apiKeys.neverUsed")}</span>
                         <span aria-hidden="true">·</span>
-                        <span>{!key.expires_at ? t("apiKeys.never") : isExpired ? t("apiKeys.expired") : t("apiKeys.expires", { date: new Date(key.expires_at).toLocaleString() })}</span>
+                        <span>{!key.expires_at ? t("apiKeys.never") : isExpired ? t("apiKeys.expired") : t("apiKeys.expires", { date: formatDateTime(key.expires_at) })}</span>
                       </div>
                     </div>
                   </div>

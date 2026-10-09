@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useDateTime } from "@/lib/timezone";
 import { Combobox } from "@base-ui/react/combobox";
 import { CheckIcon, ChevronDownIcon, SearchIcon } from "lucide-react";
 import { getEmails, getAccounts, triggerSync, type Email, type Account } from "@/lib/api";
@@ -15,6 +16,7 @@ const ALL_ACCOUNTS = "all";
 
 export default function Inbox() {
   const { t } = useTranslation();
+  const { formatInboxDate } = useDateTime();
   const [searchParams, setSearchParams] = useSearchParams();
   const [emails, setEmails] = useState<Email[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -268,7 +270,7 @@ export default function Inbox() {
                     </span>
                   </div>
                   <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {formatDate(email.received_at)}
+                    {formatInboxDate(email.received_at)}
                   </span>
                 </div>
                 <div className="flex min-w-0 gap-4 text-xs text-muted-foreground">
@@ -312,13 +314,4 @@ export default function Inbox() {
       )}
     </div>
   );
-}
-
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr);
-  const now = new Date();
-  if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-  return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useDateTime } from "@/lib/timezone";
 import { sendEmail } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ import {
 
 export default function Compose() {
   const { t } = useTranslation();
+  const { formatDateTime } = useDateTime();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -235,7 +237,7 @@ export default function Compose() {
             {savedAt && (
               <span className="text-xs text-muted-foreground">
                 {t("compose.autoSaved", {
-                  time: new Date(savedAt).toLocaleTimeString([], {
+                  time: formatDateTime(savedAt, {
                     hour: "2-digit",
                     minute: "2-digit",
                   }),

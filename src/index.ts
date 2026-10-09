@@ -11,6 +11,7 @@ import oauthRoute from "./routes/oauth";
 import settingsRoute from "./routes/settings";
 import apiKeysRoute from "./routes/api-keys";
 import userDomainsRoute from "./routes/user-domains";
+import { resolveTimeZone } from "../shared/timezone";
 
 const app = new Hono<{ Bindings: Env; Variables: { apiKey?: ApiKeyContext; user?: UserContext } }>();
 
@@ -48,13 +49,15 @@ app.use("/api/*", authMiddleware());
 app.get("/api/me", async (c) => {
   const user = c.get("user")!;
   const relay_token = await ensureRelayToken(c.env.DB, user.id);
-  const [emailRow, sharedRow] = await c.env.DB.batch([
+  const [emailRow, sharedRow, timeZoneRow] = await c.env.DB.batch([
     c.env.DB.prepare("SELECT email FROM users WHERE id = ?").bind(user.id),
     c.env.DB.prepare("SELECT value FROM settings WHERE key = 'SHARED_INBOX_DOMAIN'"),
+    c.env.DB.prepare("SELECT value FROM user_settings WHERE user_id = ? AND key = 'TIME_ZONE'").bind(user.id),
   ]);
   const email = (emailRow?.results[0] as { email: string } | undefined)?.email ?? null;
   const shared_inbox_domain = ((sharedRow?.results[0] as { value: string } | undefined)?.value ?? "").trim().toLowerCase() || null;
-  return c.json({ user: { ...user, email, relay_token }, shared_inbox_domain });
+  const time_zone = resolveTimeZone((timeZoneRow?.results[0] as { value: string } | undefined)?.value);
+  return c.json({ user: { ...user, email, relay_token }, shared_inbox_domain, time_zone });
 });
 
 // 路由挂载

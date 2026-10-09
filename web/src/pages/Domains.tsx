@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useDateTime } from "@/lib/timezone";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import {
 
 export default function Domains() {
   const { t } = useTranslation();
+  const { formatDate } = useDateTime();
   const [domains, setDomains] = useState<UserDomain[]>([]);
   const [loading, setLoading] = useState(true);
   const [newDomain, setNewDomain] = useState("");
@@ -474,7 +476,7 @@ export default function Domains() {
               <div key={d.domain_name} className="flex items-center justify-between px-4 py-3">
                 <div>
                   <div className="font-mono text-sm">{d.domain_name}</div>
-                  <div className="text-xs text-muted-foreground">{t("domains.addedAt", { date: new Date(d.created_at).toLocaleDateString() })}</div>
+                  <div className="text-xs text-muted-foreground">{t("domains.addedAt", { date: formatDate(d.created_at) })}</div>
                 </div>
                 <Button variant="destructive" size="sm" onClick={() => handleDelete(d.domain_name)}>
                   {t("domains.delete")}

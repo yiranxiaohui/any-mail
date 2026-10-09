@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { fromDateTimeInput, parseUtcDate, toDateTimeInput } from "@/lib/dateTime";
+import { useDateTime } from "@/lib/timezone";
 import { getAccounts, getAccount, deleteAccount, updateAccount, createDomainAccount, importAccounts, syncAccount, reauthAccount, getDomains, getAccountTags, bulkTagAccounts, bulkDeleteAccounts, createTagGroup, getGmailAuthUrl, getOutlookAuthUrl, type Account } from "@/lib/api";
 import { Link, useSearchParams } from "react-router-dom";
 import { Loader2, Trash2, X } from "lucide-react";
@@ -29,6 +31,7 @@ function randomLocalPart(): string {
 
 export default function Accounts() {
   const { t } = useTranslation();
+  const { formatDate, formatDateTime, timeZone } = useDateTime();
   const [searchParams, setSearchParams] = useSearchParams();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [syncingId, setSyncingId] = useState<string | null>(null);
@@ -223,7 +226,7 @@ export default function Accounts() {
   const openEdit = async (account: Account) => {
     setEditAccount(account);
     setEditEmail(account.email);
-    setEditExpiry(account.expires_at ?? "");
+    setEditExpiry(account.expires_at ? toDateTimeInput(account.expires_at, timeZone) : "");
     setEditTag(account.tag ?? "");
     setEditPassword("");
     setShowPassword(false);
@@ -247,7 +250,7 @@ export default function Accounts() {
       await updateAccount(editAccount.id, {
         email: editEmail.trim().toLowerCase(),
         password: editPassword || null,
-        expires_at: editExpiry || null,
+        expires_at: editExpiry ? fromDateTimeInput(editExpiry, timeZone, editAccount.expires_at ?? undefined) : null,
         client_id: editClientId || null,
         refresh_token: editRefreshToken || null,
         tag: editTag.trim() || null,
@@ -257,7 +260,7 @@ export default function Accounts() {
       fetchAccounts();
       fetchTags();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("settings.saveFailed"));
+      toast.error(err instanceof RangeError ? t("settings.invalidDateTime") : err instanceof Error ? err.message : t("settings.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -663,10 +666,10 @@ export default function Accounts() {
                 <label className="text-sm font-medium">{t("accounts.editFields.expiresAt")}</label>
                 <Input
                   type="datetime-local"
-                  value={editExpiry ? editExpiry.slice(0, 16) : ""}
-                  onChange={(e) => setEditExpiry(e.target.value ? new Date(e.target.value).toISOString() : "")}
+                  value={editExpiry}
+                  onChange={(e) => setEditExpiry(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">{t("accounts.editExpiresHint")}</p>
+                <p className="text-xs text-muted-foreground">{t("accounts.editExpiresHint")} · {timeZone}</p>
               </div>
               <Button className="w-full" onClick={handleSaveEdit} disabled={saving}>
                 {saving ? t("settings.saving") : t("settings.save")}
@@ -911,11 +914,11 @@ export default function Accounts() {
                       )}
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {t("accounts.connected", { date: new Date(account.created_at).toLocaleDateString() })}
+                      {t("accounts.connected", { date: formatDate(account.created_at) })}
                       {account.expires_at && (
-                        new Date(account.expires_at) < new Date()
+                        parseUtcDate(account.expires_at).getTime() < Date.now()
                           ? ` · ${t("accounts.expired")}`
-                          : ` · ${t("accounts.expires", { date: new Date(account.expires_at).toLocaleString() })}`
+                          : ` · ${t("accounts.expires", { date: formatDateTime(account.expires_at) })}`
                       )}
                     </span>
                   </div>

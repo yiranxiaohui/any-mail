@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getSettings, updateSettings } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { useDateTime, useTimeZone } from "@/lib/timezone";
+import { availableTimeZones, timeZoneOffsetLabel } from "@/lib/dateTime";
+import { DEFAULT_TIME_ZONE, resolveTimeZone } from "../../../shared/timezone";
 
 interface FieldConfig {
   key: string;
@@ -34,10 +37,13 @@ const CLOUDFLARE_FIELDS: FieldConfig[] = [
 
 export default function Settings() {
   const { t } = useTranslation();
+  const { timeZone, setTimeZone } = useTimeZone();
   const [values, setValues] = useState<Record<string, string>>({});
   const [existing, setExisting] = useState<Record<string, { masked: string; updated_at: string }>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const selectedTimeZone = values.TIME_ZONE ?? resolveTimeZone(existing.TIME_ZONE?.masked ?? timeZone);
+  const timeZones = useMemo(() => [...new Set([selectedTimeZone, ...availableTimeZones()])], [selectedTimeZone]);
 
   useEffect(() => {
     getSettings()
@@ -47,9 +53,11 @@ export default function Settings() {
           ex[k] = { masked: v.masked, updated_at: v.updated_at };
         }
         setExisting(ex);
+        setTimeZone(resolveTimeZone(res.settings.TIME_ZONE?.value));
       })
+      .catch(() => toast.error(t("settings.loadFailed")))
       .finally(() => setLoading(false));
-  }, []);
+  }, [setTimeZone, t]);
 
   const handleChange = (key: string, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -63,6 +71,7 @@ export default function Settings() {
     setSaving(true);
     try {
       await updateSettings(changed);
+      if (changed.TIME_ZONE) setTimeZone(changed.TIME_ZONE);
       toast.success(t("settings.saved"));
       const res = await getSettings();
       const ex: Record<string, { masked: string; updated_at: string }> = {};
@@ -109,7 +118,25 @@ export default function Settings() {
         values={values}
         existing={existing}
         onChange={handleChange}
-      />
+      >
+        <div className="space-y-1.5">
+          <label htmlFor="time-zone" className="text-sm font-medium">{t("settings.timeZone")}</label>
+          <select
+            id="time-zone"
+            value={selectedTimeZone}
+            onChange={(e) => handleChange("TIME_ZONE", e.target.value)}
+            disabled={saving}
+            className="h-9 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring/50"
+          >
+            {timeZones.map((zone) => (
+              <option key={zone} value={zone}>
+                {timeZoneOffsetLabel(zone)} · {zone === DEFAULT_TIME_ZONE ? t("settings.beijingTime") : zone.replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">{t("settings.timeZoneHint")}</p>
+        </div>
+      </SettingsSection>
 
       <SettingsSection
         title={t("settings.cloudflare")}
@@ -168,6 +195,7 @@ function SettingsSection({
   existing,
   onChange,
   extraAction,
+  children,
 }: {
   title: string;
   description: string;
@@ -177,8 +205,10 @@ function SettingsSection({
   existing: Record<string, { masked: string; updated_at: string }>;
   onChange: (key: string, value: string) => void;
   extraAction?: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   const { t } = useTranslation();
+  const { formatDateTime } = useDateTime();
   return (
     <Card>
       <CardHeader>
@@ -195,6 +225,7 @@ function SettingsSection({
       </CardHeader>
       <Separator />
       <CardContent className="pt-4 space-y-4">
+        {children}
         {fields.map((field) => {
           const ex = existing[field.key];
           return (
@@ -206,9 +237,9 @@ function SettingsSection({
                 value={values[field.key] ?? ""}
                 onChange={(e) => onChange(field.key, e.target.value)}
               />
-              {ex && (
+              {ex?.updated_at && (
                 <p className="text-xs text-muted-foreground">
-                  {t("settings.lastUpdated", { date: new Date(ex.updated_at).toLocaleString() })}
+                  {t("settings.lastUpdated", { date: formatDateTime(ex.updated_at) })}
                 </p>
               )}
             </div>

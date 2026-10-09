@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useDateTime } from "@/lib/timezone";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,7 @@ interface ReceivedEmail {
 
 export default function Receive() {
   const { t, i18n } = useTranslation();
+  const { formatDateTime, formatTime } = useDateTime();
   const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(KEY_STORAGE) ?? "");
@@ -257,7 +259,7 @@ export default function Receive() {
                 {lastFetched && (
                   <span className="ml-auto text-xs text-muted-foreground">
                     {t("receive.lastFetched", {
-                      time: lastFetched.toLocaleTimeString(),
+                      time: formatTime(lastFetched),
                     })}
                   </span>
                 )}
@@ -295,11 +297,7 @@ export default function Receive() {
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
                       <span>
-                        {new Date(
-                          m.received_at.includes("T")
-                            ? m.received_at
-                            : m.received_at.replace(" ", "T") + "Z",
-                        ).toLocaleString()}
+                        {formatDateTime(m.received_at)}
                       </span>
                       <svg
                         width="14"

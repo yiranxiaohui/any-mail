@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useDateTime } from "@/lib/timezone";
 import { getEmail, deleteEmail, type Email } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -24,6 +25,7 @@ function HtmlBodyFrame({ html }: { html: string }) {
 
 export default function EmailDetail() {
   const { t } = useTranslation();
+  const { formatDateTime } = useDateTime();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const goBack = () => {
@@ -126,7 +128,7 @@ export default function EmailDetail() {
           <span className="text-muted-foreground">{t("email.to")}</span>
           <span className="truncate">{email.to_address}</span>
           <span className="text-muted-foreground">{t("email.date")}</span>
-          <span>{new Date(email.received_at).toLocaleString()}</span>
+          <span>{formatDateTime(email.received_at)}</span>
         </div>
 
         <Separator />

@@ -79,6 +79,7 @@ export interface AuthedUser {
 export interface MeResponse {
   user: AuthedUser;
   shared_inbox_domain: string | null;
+  time_zone: string;
 }
 
 export function apiLogin(email: string, password: string) {

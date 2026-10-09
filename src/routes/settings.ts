@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { requireJwt, getUserId, type ApiKeyContext, type UserContext } from "../auth";
+import { DEFAULT_TIME_ZONE, isValidTimeZone } from "../../shared/timezone";
 
 // 系统级（仅 admin 可读写）
 const SYSTEM_KEYS = [
@@ -13,6 +14,7 @@ const SYSTEM_KEYS = [
 
 // 用户级（每个用户独立）
 const USER_KEYS = [
+  "TIME_ZONE",
   "RESEND_API_KEY",
   "GMAIL_CLIENT_ID",
   "GMAIL_CLIENT_SECRET",
@@ -30,6 +32,7 @@ settings.get("/", async (c) => {
   const userId = getUserId(c);
   const user = c.get("user")!;
   const result: Record<string, { value: string; masked: string; updated_at: string }> = {};
+  result.TIME_ZONE = { value: DEFAULT_TIME_ZONE, masked: DEFAULT_TIME_ZONE, updated_at: "" };
 
   const userRows = await c.env.DB.prepare(
     "SELECT key, value, updated_at FROM user_settings WHERE user_id = ?"
@@ -64,6 +67,10 @@ settings.put("/", async (c) => {
   const userId = getUserId(c);
   const user = c.get("user")!;
   const body = await c.req.json<Record<string, string>>();
+
+  if ("TIME_ZONE" in body && !isValidTimeZone(body.TIME_ZONE)) {
+    return c.json({ error: "invalid time zone" }, 400);
+  }
 
   const stmts = [];
   for (const [key, value] of Object.entries(body)) {
